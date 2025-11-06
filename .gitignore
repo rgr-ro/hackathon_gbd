@@ -219,3 +219,5 @@ pyrightconfig.json
 # End of https://www.toptal.com/developers/gitignore/api/visualstudiocode,python,data,database
 
 *.DS_Store
+
+data/csv/*.csv
