@@ -1,1 +1,57 @@
-first commit
+## CONSULTAS DE TEST DE DATOS
+
+```
+SELECT * FROM UNIVERSIDAD;
+```
+
+```
+SELECT COUNT(*) AS total_licitaciones
+FROM LICITACION;
+```
+
+```
+SELECT
+    a.cuantia_total,
+    c.nombre_convocatoria,
+    c.des_categoria
+FROM
+    AYUDA a
+JOIN
+    CONVOCATORIA_AYUDA c ON a.cod_convocatoria_ayuda = c.cod_convocatoria
+WHERE
+    a.cuantia_total > 3000  -- Filtramos para ver solo ayudas significativas
+ORDER BY
+    a.cuantia_total DESC
+LIMIT 10;
+```
+
+```
+SELECT
+    l.objeto_licitacion_o_lote,
+    l.importe_adjudicacion_sin_impuestos_licitacion_o_lote,
+    l.adjudicatario_licitacion_o_lote,
+    u.nombre_corto
+FROM
+    LICITACION l
+JOIN
+    UNIVERSIDAD u ON l.nif_oc = u.nifoc
+WHERE
+    u.nombre_corto = 'UAM'
+ORDER BY
+    l.importe_adjudicacion_sin_impuestos_licitacion_o_lote DESC NULLS LAST
+LIMIT 5;
+```
+
+```
+SELECT
+    des_capitulo,
+    SUM(credito_total) AS total_gastado
+FROM
+    PRESUPUESTO_GASTOS
+WHERE
+    cod_universidad = '23' -- Filtramos por la UAM
+GROUP BY
+    des_capitulo
+ORDER BY
+    total_gastado DESC;
+```
