@@ -145,6 +145,16 @@ exitosos = 0
 fallidos = 0
 
 for url in urls_csvs:
+    # Nombre destino previsto para este URL
+    nombre_archivo = url.split("/")[-1]
+    ruta_destino = os.path.join(directorio_destino, nombre_archivo)
+
+    # Si el archivo ya existe y tiene tamaño > 0, omitir la descarga
+    if os.path.exists(ruta_destino) and os.path.getsize(ruta_destino) > 0:
+        print(f"  - Omitiendo {nombre_archivo}: ya existe en {ruta_destino}\n")
+        exitosos += 1
+        continue
+
     if descargar_csv(url):
         exitosos += 1
     else:

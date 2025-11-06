@@ -67,6 +67,12 @@ services:
       # the image's /app directory and prevents creation of sub-mountpoints.
       - ./descarga_datos:/app/src:ro
     working_dir: /app
+    # Keep the container running after the script finishes so you can
+    # enter it with `docker exec -it descarga_datos bash`.
+    # The command runs the downloader in background and then tails /dev/null.
+    command: /bin/bash -c "python /app/descarga_datos.py & exec tail -f /dev/null"
+    stdin_open: true
+    tty: true
     networks:
       - gestbd_net
 

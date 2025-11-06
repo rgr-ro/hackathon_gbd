@@ -10,6 +10,16 @@ COPY requirements.txt .
 # Instala las dependencias de Python
 RUN pip install --no-cache-dir -r requirements.txt
 
+# Instala bash y `tree` para permitir entrar al contenedor con
+# `docker exec -it <container> bash` y usar el comando `tree`.
+# `python:3.12-slim` does not guarantee bash is present.
+RUN apt-get update \
+	&& apt-get install -y --no-install-recommends bash tree \
+	# Añade un alias global para shells interactivos: ll -> ls -l
+	&& echo "alias ll='ls -l'" > /etc/profile.d/ll_alias.sh \
+	&& chmod 644 /etc/profile.d/ll_alias.sh \
+	&& rm -rf /var/lib/apt/lists/*
+
 # Copia el script de Python al contenedor
 COPY ./scripts/descarga_datos.py .
 
