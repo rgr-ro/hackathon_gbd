@@ -48,6 +48,24 @@ services:
     networks:
       - gestbd_net
 
+  descarga_datos:
+    build:
+      context: ./descarga_datos
+      dockerfile: Dockerfile
+    image: descarga_datos:latest
+    container_name: descarga_datos
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      # Mount host ./data to the output directory the Dockerfile creates
+      - ./data:/app/datos_output:rw
+      # Optionally mount the Dockerfile directory so changes to the script are visible
+      - ./descarga_datos:/app:ro
+    working_dir: /app
+    networks:
+      - gestbd_net
+
 volumes:
   db_data:
   pgadmin_data:
