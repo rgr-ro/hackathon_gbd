@@ -87,12 +87,9 @@ def descargar_zip_y_extraer_csvs(url, destino_csvs):
     """
     Descarga un ZIP desde la URL y extrae únicamente los archivos .csv
     hacia el directorio indicado. Descarta otros formatos.
+    Conserva los nombres originales de los archivos.
     """
     print(f"Procesando ZIP: {url}")
-
-    # Nombre base del ZIP (para prefijar y evitar colisiones de nombre)
-    zip_slug = url.rstrip("/").split("/")[-2:]  # p.ej. ['dataset', 'download'] o ['1230', 'dataset']
-    zip_slug = "-".join(zip_slug)
 
     try:
         with requests.get(url, stream=True, timeout=60) as r:
@@ -114,16 +111,15 @@ def descargar_zip_y_extraer_csvs(url, destino_csvs):
                 if not name.lower().endswith('.csv'):
                     continue
 
-                # Asegurar nombre seguro (sin rutas) y prefijo para evitar colisiones
+                # Conservar nombre original sin prefijos
                 base_name = os.path.basename(name)
                 if not base_name:
                     continue
-                prefixed_name = f"{zip_slug}__{base_name}"
-                out_path = os.path.join(destino_csvs, prefixed_name)
+                out_path = os.path.join(destino_csvs, base_name)
 
                 # Si el archivo ya existe y tiene tamaño > 0, omitir la extracción
                 if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
-                    print(f"  - Omitiendo {prefixed_name}: ya existe en {out_path}")
+                    print(f"  - Omitiendo {base_name}: ya existe en {out_path}")
                     continue
 
                 # Extraer como binario
