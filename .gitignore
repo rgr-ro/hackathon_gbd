@@ -220,4 +220,4 @@ pyrightconfig.json
 
 *.DS_Store
 
-data/csv/*.csv
+data/**/*.csv
