@@ -14,8 +14,14 @@ urls_csvs = [
     "https://www.universidata.es/sites/default/files/uam-ayudas-2023-24-anonimizado.csv"
 ]
 
-# Directorio donde se guardarán los archivos CSV descargados directamente
-directorio_destino = "csv"
+# Base del directorio de salida (p. ej. /app/csv dentro del contenedor)
+base_output_dir = os.environ.get("DATA_OUTPUT_DIR", "csv")
+
+# Colocar los CSV directos dentro de un subdirectorio `all_csv` bajo la
+# carpeta base. Esto asegura que tanto las descargas directas como los
+# CSV extraídos desde ZIPs terminen en `csv/all_csv` cuando se ejecuta en
+# el contenedor (y sigue funcionando localmente).
+directorio_destino = os.path.join(base_output_dir, "all_csv")
 
 # URLs de ZIPs que contienen archivos variados; solo se extraerán los CSV
 zip_urls = [
@@ -26,8 +32,10 @@ zip_urls = [
     "https://www.universidata.es/node/1230/dataset/download",
 ]
 
-# Directorio donde se guardarán TODOS los CSV extraídos de los ZIPs
-directorio_destino_totales = "all_csv"
+# Directorio donde se guardarán TODOS los CSV extraídos de los ZIPs. Por
+# defecto apuntamos también a csv/all_csv, pero permitimos sobrescribirlo
+# con DATA_OUTPUT_DIR_ALL si se desea.
+directorio_destino_totales = os.environ.get("DATA_OUTPUT_DIR_ALL", os.path.join(base_output_dir, "all_csv"))
 
 # --- 2. CREAR DIRECTORIO DE DESTINO ---
 Path(directorio_destino).mkdir(parents=True, exist_ok=True)
@@ -112,6 +120,11 @@ def descargar_zip_y_extraer_csvs(url, destino_csvs):
                     continue
                 prefixed_name = f"{zip_slug}__{base_name}"
                 out_path = os.path.join(destino_csvs, prefixed_name)
+
+                # Si el archivo ya existe y tiene tamaño > 0, omitir la extracción
+                if os.path.exists(out_path) and os.path.getsize(out_path) > 0:
+                    print(f"  - Omitiendo {prefixed_name}: ya existe en {out_path}")
+                    continue
 
                 # Extraer como binario
                 with zf.open(member, 'r') as src, open(out_path, 'wb') as dst:

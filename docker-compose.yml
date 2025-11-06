@@ -61,11 +61,13 @@ services:
     env_file:
       - .env
     volumes:
-      # Mount host ./data to the output directory the Dockerfile creates
-      - ./data:/app/datos_output:rw
-      # Mount the build folder into /app/src (read-only) so it doesn't shadow
-      # the image's /app directory and prevents creation of sub-mountpoints.
-      - ./descarga_datos:/app/src:ro
+      # Mount host ./data/csv/all_csv to the container's expected /app/csv/all_csv output dir
+      # This ensures files the downloader writes to /app/csv/all_csv are visible on the host
+      - ./data/csv/all_csv:/app/csv/all_csv:rw
+      # Note: do not mount the parent ./data/csv here — mounting the parent can hide
+      # files created during the image build. Mount the exact folder the app writes to.
+      # Mount the downloader scripts into /app/scripts (read-only)
+      - ./descarga_datos/scripts:/app/scripts:ro
     working_dir: /app
     # Keep the container running after the script finishes so you can
     # enter it with `docker exec -it descarga_datos bash`.
