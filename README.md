@@ -55,3 +55,11 @@ GROUP BY
 ORDER BY
     total_gastado DESC;
 ```
+
+```
+SELECT COUNT(*) FROM presupuesto_gastos;
+SELECT COUNT(*) FROM presupuesto_ingresos;
+SELECT COUNT(*) FROM convocatoria_ayuda;
+SELECT COUNT(*) FROM ayuda;
+SELECT COUNT(*) FROM licitacion;
+```
