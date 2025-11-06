@@ -11,7 +11,7 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 # Copia el script de Python al contenedor
-COPY download_script.py .
+COPY ./scripts/descarga_datos.py .
 
 # Crea los directorios donde se guardarán los datos descargados y los scripts
 # `/app/datos_output` es el directorio de salida; `/app/scripts` es el punto
@@ -31,4 +31,4 @@ ENV DATA_OUTPUT_DIR=/app/datos_output \
 VOLUME ["/app/datos_output", "/app/scripts"]
 
 # Comando que se ejecutará cuando el contenedor se inicie
-CMD ["python", "download_script.py"]
+CMD ["python", "descarga_datos.py"]

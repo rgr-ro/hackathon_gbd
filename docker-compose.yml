@@ -63,8 +63,9 @@ services:
     volumes:
       # Mount host ./data to the output directory the Dockerfile creates
       - ./data:/app/datos_output:rw
-      # Optionally mount the Dockerfile directory so changes to the script are visible
-      - ./descarga_datos:/app:ro
+      # Mount the build folder into /app/src (read-only) so it doesn't shadow
+      # the image's /app directory and prevents creation of sub-mountpoints.
+      - ./descarga_datos:/app/src:ro
     working_dir: /app
     networks:
       - gestbd_net
