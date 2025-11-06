@@ -23,23 +23,22 @@ RUN apt-get update \
 # Copia el script de Python al contenedor
 COPY ./scripts/descarga_datos.py .
 
-# Crea los directorios donde se guardarán los datos descargados y los scripts
-# `/app/datos_output` es el directorio de salida; `/app/scripts` es el punto
-# donde recomendamos montar el directorio `./scripts` del proyecto desde el
-# host (esto se hace en docker-compose.yml mediante un volumen).
-RUN mkdir -p /app/csv /app/csv/all_csv /app/scripts \
-	&& chown -R root:root /app/scripts /app/csv /app/csv/all_csv
+# Crea los directorios donde se guardarán los datos descargados
+# `/app/data/csv` para los CSV directos de 2023
+# `/app/data/all_csv` para los CSV extraídos de los ZIPs
+# `/app/scripts` para montar scripts desde el host
+RUN mkdir -p /app/data/csv /app/data/all_csv /app/scripts \
+	&& chown -R root:root /app/scripts /app/data
 
 # Exponer variables de entorno útiles dentro de la imagen
-ENV DATA_OUTPUT_DIR=/app/csv \
-	DATA_OUTPUT_DIR_ALL=/app/csv/all_csv \
-	SCRIPTS_DIR=/app/scripts
+ENV SCRIPTS_DIR=/app/scripts
 
 # Declare volúmenes para documentar la intención. Note: VOLUME creates
 # anonymous volumes when the container is run without an explicit bind mount.
-# To access host `./scripts`, add a bind mount in docker-compose (recommended):
+# To access host data, add bind mounts in docker-compose (recommended):
+#   - ./data:/app/data:rw
 #   - ./scripts:/app/scripts:ro
-VOLUME ["/app/csv", "/app/csv/all_csv", "/app/scripts"]
+VOLUME ["/app/data", "/app/scripts"]
 
 # Comando que se ejecutará cuando el contenedor se inicie
 CMD ["python", "descarga_datos.py"]
