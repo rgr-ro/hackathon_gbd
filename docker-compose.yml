@@ -1,4 +1,4 @@
-version: '3.8'
+version: "3.8"
 
 services:
   db:
@@ -39,9 +39,21 @@ services:
     networks:
       - gestbd_net
 
+  graphdb:
+    image: ontotext/graphdb:10.3.2
+    ports:
+      - 8000:7200
+    environment:
+      GDB_JAVA_OPTS: -Dgraphdb.workbench.importDirectory=/opt/graphdb/home/graphdb-import
+    volumes:
+      - graphdb_data:/opt/graphdb/home
+    networks:
+      - gestbd_net
+
 volumes:
   db_data:
   pgadmin_data:
+  graphdb_data:
 
 networks:
   gestbd_net:
