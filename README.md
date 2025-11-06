@@ -1,3 +1,20 @@
+# TODO
+
+- [ ] Hacer todo el pgvector:
+  - [ ] creacion/modificacion de tablas para meter los embeddings
+  - [ ] Modificar los scripts para coger el texto de los csv y que los inserte en la tabla correspondiente
+  - [ ] probar la busqueda semantica por consola
+- [ ] Adaptar scripts para que coja los csv y los inyecte en el postgresql
+- [ ] Apartado de graphdb
+  - [ ] Probar el rdf si vale la pena hacerlos a partir de los csv o a partir de la tabla sql
+  - [ ] O hacer un dump de la BBDD y apartir de ella generar los RDF (aplicando reglas `YARRRML` o `RML` para generacion de `ttl`s) hacerlo directamente en el script
+  - [ ] Probar consultas de SPARQL
+- [ ] Organizar presentacion
+  - [ ] Preparar consultas demos
+  - [ ] Preparar explicacion de la estructura
+
+----
+
 ## CONSULTAS DE TEST DE DATOS
 
 ```
