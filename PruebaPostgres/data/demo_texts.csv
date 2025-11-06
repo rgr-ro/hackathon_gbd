@@ -1,0 +1,7 @@
+id,content,lang
+1,The quick brown fox jumps over the lazy dog,en
+2,El zorro marrón rápido salta sobre el perro perezoso,es
+3,This document is about PostgreSQL and pgvector.,en
+4,Este documento trata sobre PostgreSQL y pgvector.,es
+5,How to connect to pgAdmin and view databases?,en
+6,¿Cómo conectarse a pgAdmin y ver las bases de datos?,es

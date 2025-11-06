@@ -1,0 +1,5 @@
+psycopg2-binary>=2.9
+numpy>=1.20
+# Optional, for semantic multilingual embeddings (install if you plan to use --mode transformer)
+# sentence-transformers>=2.2.2
+# Note: sentence-transformers will pull a deep learning backend (torch). Install only when needed.
