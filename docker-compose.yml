@@ -14,6 +14,8 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - db_data:/var/lib/postgresql/data
+      - ./data/csv:/data/csv
+      - ./init-sql:/docker-entrypoint-initdb.d
     ports:
       - "${DB_HOST_PORT:-5432}:5432"
     networks:
@@ -45,6 +47,7 @@ services:
       GDB_JAVA_OPTS: -Dgraphdb.workbench.importDirectory=/opt/graphdb/home/graphdb-import
     volumes:
       - graphdb_data:/opt/graphdb/home
+      - ./data/ttl:/opt/graphdb/home/data/import
     networks:
       - gestbd_net
 
