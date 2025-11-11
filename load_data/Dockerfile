@@ -9,7 +9,7 @@ RUN apt-get update && \
     rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-RUN pip install --no-cache-dir psycopg2-binary
+RUN pip install --no-cache-dir psycopg2-binary numpy sentence-transformers
 
 # Note: The load script will be mounted as a volume in docker-compose
 # No need to COPY it here since we'll use the live version from the host
