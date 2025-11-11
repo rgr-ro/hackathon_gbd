@@ -51,7 +51,7 @@ UAM_NIFOC = "Q2818013A"
 UAM_URI = G2_UNI["UAM-Q2818013A"]
 
 # Ruta base a la carpeta de CSVs
-BASE_CSV_PATH = Path(__file__).parent.parent / "data" / "all_csv"
+BASE_CSV_PATH = Path(__file__).parent.parent / "data" / "csv" / "all_csv"
 
 
 # --- FUNCIÓN PARA AUTO-DETECTAR CSVs ---
@@ -61,93 +61,114 @@ def generar_catalogo_config():
     la configuración para todos los CSVs encontrados.
     """
     catalogo = []
-    
+
     if not BASE_CSV_PATH.exists():
         print(f"ADVERTENCIA: No se encontró la carpeta {BASE_CSV_PATH}")
         return catalogo
-    
+
     # Obtener todos los archivos CSV
     csv_files = sorted(BASE_CSV_PATH.glob("*.csv"))
-    
+
     # Patrón para extraer el año de los nombres de archivo
     import re
-    
+
     for csv_file in csv_files:
         filename = csv_file.name
-        
+
         # Extraer año del nombre del archivo
-        año_match = re.search(r'(\d{4})', filename)
+        año_match = re.search(r"(\d{4})", filename)
         año = año_match.group(1) if año_match else "2023"
-        
+
         # Determinar el tipo de entidad basado en el nombre del archivo
         if "licitaciones" in filename.lower():
-            catalogo.append({
-                "entidad": "LICITACION",
-                "archivo_csv": str(csv_file),
-                "dataset_id": f"dataset-licitaciones-uam-{año}",
-                "titulo_dataset": f"Licitaciones de Contratos Mayores de la UAM {año}",
-                "desc_dataset": f"Datos de licitaciones adjudicadas, importes y adjudicatarios del año {año}.",
-                "keywords": ["licitaciones", "contratos", "transparencia", "gasto"],
-                "año_fiscal": año,
-                "procesar_funcion": "procesar_licitacion",
-            })
-        
+            catalogo.append(
+                {
+                    "entidad": "LICITACION",
+                    "archivo_csv": str(csv_file),
+                    "dataset_id": f"dataset-licitaciones-uam-{año}",
+                    "titulo_dataset": f"Licitaciones de Contratos Mayores de la UAM {año}",
+                    "desc_dataset": f"Datos de licitaciones adjudicadas, importes y adjudicatarios del año {año}.",
+                    "keywords": ["licitaciones", "contratos", "transparencia", "gasto"],
+                    "año_fiscal": año,
+                    "procesar_funcion": "procesar_licitacion",
+                }
+            )
+
         elif "presupuesto-de-gastos" in filename.lower():
-            catalogo.append({
-                "entidad": "PRESUPUESTO_GASTOS",
-                "archivo_csv": str(csv_file),
-                "dataset_id": f"dataset-presupuestos-gastos-uam-{año}",
-                "titulo_dataset": f"Presupuestos de Gastos de la UAM {año}",
-                "desc_dataset": f"Créditos iniciales, modificaciones y créditos totales por capítulo del año {año}.",
-                "keywords": ["presupuestos", "economía", "gasto"],
-                "año_fiscal": año,
-                "procesar_funcion": "procesar_presupuesto_gastos",
-            })
-        
+            catalogo.append(
+                {
+                    "entidad": "PRESUPUESTO_GASTOS",
+                    "archivo_csv": str(csv_file),
+                    "dataset_id": f"dataset-presupuestos-gastos-uam-{año}",
+                    "titulo_dataset": f"Presupuestos de Gastos de la UAM {año}",
+                    "desc_dataset": f"Créditos iniciales, modificaciones y créditos totales por capítulo del año {año}.",
+                    "keywords": ["presupuestos", "economía", "gasto"],
+                    "año_fiscal": año,
+                    "procesar_funcion": "procesar_presupuesto_gastos",
+                }
+            )
+
         elif "presupuesto-de-ingresos" in filename.lower():
-            catalogo.append({
-                "entidad": "PRESUPUESTO_INGRESOS",
-                "archivo_csv": str(csv_file),
-                "dataset_id": f"dataset-presupuestos-ingresos-uam-{año}",
-                "titulo_dataset": f"Presupuestos de Ingresos de la UAM {año}",
-                "desc_dataset": f"Créditos iniciales, modificaciones y créditos totales por capítulo del año {año}.",
-                "keywords": ["presupuestos", "economía", "ingresos"],
-                "año_fiscal": año,
-                "procesar_funcion": "procesar_presupuesto_ingresos",
-            })
-        
+            catalogo.append(
+                {
+                    "entidad": "PRESUPUESTO_INGRESOS",
+                    "archivo_csv": str(csv_file),
+                    "dataset_id": f"dataset-presupuestos-ingresos-uam-{año}",
+                    "titulo_dataset": f"Presupuestos de Ingresos de la UAM {año}",
+                    "desc_dataset": f"Créditos iniciales, modificaciones y créditos totales por capítulo del año {año}.",
+                    "keywords": ["presupuestos", "economía", "ingresos"],
+                    "año_fiscal": año,
+                    "procesar_funcion": "procesar_presupuesto_ingresos",
+                }
+            )
+
         elif "conv-ayudas" in filename.lower():
-            catalogo.append({
-                "entidad": "CONVOCATORIA_AYUDA",
-                "archivo_csv": str(csv_file),
-                "dataset_id": f"dataset-convocatorias-ayudas-uam-{año}",
-                "titulo_dataset": f"Convocatorias de Ayudas de la UAM {año}",
-                "desc_dataset": f"Convocatorias de ayudas y becas de la universidad del año {año}.",
-                "keywords": ["ayudas", "becas", "convocatorias"],
-                "año_fiscal": año,
-                "procesar_funcion": "procesar_convocatoria_ayuda",
-            })
-        
+            catalogo.append(
+                {
+                    "entidad": "CONVOCATORIA_AYUDA",
+                    "archivo_csv": str(csv_file),
+                    "dataset_id": f"dataset-convocatorias-ayudas-uam-{año}",
+                    "titulo_dataset": f"Convocatorias de Ayudas de la UAM {año}",
+                    "desc_dataset": f"Convocatorias de ayudas y becas de la universidad del año {año}.",
+                    "keywords": ["ayudas", "becas", "convocatorias"],
+                    "año_fiscal": año,
+                    "procesar_funcion": "procesar_convocatoria_ayuda",
+                }
+            )
+
         elif "ayudas" in filename.lower() and "anonimizado" in filename.lower():
-            catalogo.append({
-                "entidad": "AYUDA",
-                "archivo_csv": str(csv_file),
-                "dataset_id": f"dataset-ayudas-concedidas-uam-{año}",
-                "titulo_dataset": f"Ayudas Concedidas por la UAM {año} (Anonimizado)",
-                "desc_dataset": f"Datos anonimizados de las ayudas concedidas en el año {año}.",
-                "keywords": ["ayudas", "becas", "concedidas"],
-                "año_fiscal": año,
-                "procesar_funcion": "procesar_ayuda",
-            })
-    
+            catalogo.append(
+                {
+                    "entidad": "AYUDA",
+                    "archivo_csv": str(csv_file),
+                    "dataset_id": f"dataset-ayudas-concedidas-uam-{año}",
+                    "titulo_dataset": f"Ayudas Concedidas por la UAM {año} (Anonimizado)",
+                    "desc_dataset": f"Datos anonimizados de las ayudas concedidas en el año {año}.",
+                    "keywords": ["ayudas", "becas", "concedidas"],
+                    "año_fiscal": año,
+                    "procesar_funcion": "procesar_ayuda",
+                }
+            )
+
     print(f"\n✓ Se encontraron {len(catalogo)} archivos CSV para procesar")
-    print(f"  - Licitaciones: {sum(1 for c in catalogo if c['entidad'] == 'LICITACION')}")
-    print(f"  - Presupuestos Gastos: {sum(1 for c in catalogo if c['entidad'] == 'PRESUPUESTO_GASTOS')}")
-    print(f"  - Presupuestos Ingresos: {sum(1 for c in catalogo if c['entidad'] == 'PRESUPUESTO_INGRESOS')}")
-    print(f"  - Convocatorias Ayudas: {sum(1 for c in catalogo if c['entidad'] == 'CONVOCATORIA_AYUDA')}")
-    print(f"  - Ayudas Concedidas: {sum(1 for c in catalogo if c['entidad'] == 'AYUDA')}\n")
-    
+    print(
+        f"  - Licitaciones: {sum(1 for c in catalogo if c['entidad'] == 'LICITACION')}"
+    )
+    print(
+        f"  - Presupuestos Gastos: {sum(1 for c in catalogo if c['entidad'] == 'PRESUPUESTO_GASTOS')}"
+    )
+    print(
+        f"  - Presupuestos Ingresos: {sum(1 for c in catalogo if c['entidad'] == 'PRESUPUESTO_INGRESOS')}"
+    )
+    print(
+        f"  - Convocatorias Ayudas: {sum(1 for c in catalogo if c['entidad'] == 'CONVOCATORIA_AYUDA')}"
+    )
+    print(
+        f"  - Ayudas Concedidas: {sum(1 for c in catalogo if c['entidad'] == 'AYUDA')}\n"
+    )
+
     return catalogo
+
 
 # --- 3. Funciones de Procesamiento de Contenido (Basadas en el ERD) ---
 
@@ -490,12 +511,12 @@ FUNCIONES_PROCESADO = {
 def main():
     # Generar catálogo automáticamente desde la carpeta
     CATALOGO_CONFIG = generar_catalogo_config()
-    
+
     if not CATALOGO_CONFIG:
         print("ERROR: No se encontraron archivos CSV para procesar.")
         print(f"Verifica que exista la carpeta: {BASE_CSV_PATH}")
         return
-    
+
     g = Graph()
     g.bind("dcat", DCAT)
     g.bind("dcterms", DCTERMS)
@@ -603,7 +624,9 @@ def main():
         # Usar un ID único que incluya el año para evitar colisiones
         dist_id = f"distribucion-{config['entidad'].lower()}-{config['año_fiscal']}"
         dist_uri = G2_DATA[dist_id]
-        distribuciones_uris[f"{config['entidad']}-{config['año_fiscal']}"] = dist_uri  # Guardamos con clave única
+        distribuciones_uris[f"{config['entidad']}-{config['año_fiscal']}"] = (
+            dist_uri  # Guardamos con clave única
+        )
 
         g.add((dataset_uri, DCAT.distribution, dist_uri))
         g.add((dist_uri, RDF.type, DCAT.Distribution))
@@ -629,7 +652,9 @@ def main():
     for config in CATALOGO_CONFIG:
         entidad = config["entidad"]
         año = config["año_fiscal"]
-        dist_uri = distribuciones_uris[f"{entidad}-{año}"]  # Recuperamos la URI del CSV con clave única
+        dist_uri = distribuciones_uris[
+            f"{entidad}-{año}"
+        ]  # Recuperamos la URI del CSV con clave única
 
         # Obtenemos la función de procesado correcta del diccionario
         funcion_a_llamar_str = config["procesar_funcion"]
