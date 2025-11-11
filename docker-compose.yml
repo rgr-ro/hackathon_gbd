@@ -78,6 +78,51 @@ services:
     networks:
       - gestbd_net
 
+  load_data:
+    build:
+      context: ./load_data
+      dockerfile: Dockerfile
+    image: load_data:latest
+    container_name: load_data
+    restart: "no"
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+    volumes:
+      - ./data/csv/all_csv:/app/data/csv/all_csv:ro
+      - ./scripts:/app/scripts:ro
+    working_dir: /app
+    command:
+      - /bin/bash
+      - -c
+      - |
+        echo 'Waiting for PostgreSQL to be ready...'
+        until pg_isready -h db -p 5432 -U $${POSTGRES_USER}; do
+          echo 'PostgreSQL is unavailable - sleeping'
+          sleep 2
+        done
+        echo 'PostgreSQL is ready!'
+        echo 'Waiting for data download to complete...'
+        sleep 10
+        echo 'Starting data load...'
+        python scripts/load_filtered_csvs.py \
+          --csv-dir /app/data/csv/all_csv \
+          --host db \
+          --port 5432 \
+          --user $${POSTGRES_USER} \
+          --password $${POSTGRES_PASSWORD} \
+          --dbname $${POSTGRES_DB}
+    depends_on:
+      - db
+      - descarga_datos
+    networks:
+      - gestbd_net
+
 volumes:
   db_data:
   pgadmin_data:
