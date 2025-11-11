@@ -208,3 +208,45 @@ SELECT COUNT(*) FROM convocatoria_ayuda;
 SELECT COUNT(*) FROM ayuda;
 SELECT COUNT(*) FROM licitacion;
 ```
+
+## Ejecutar pruebas unitarias dentro del contenedor `descarga_datos`
+
+El repositorio incluye pruebas unitarias en `tests/` (por ejemplo `tests/test_pgvector_ingest_and_query.py`).
+Para ejecutar las pruebas desde Windows PowerShell dentro del contenedor `descarga_datos`.
+
+1) Ejecutar la prueba en un contenedor puntual (recomendado)
+
+Desde la raíz del repositorio ejecuta:
+
+```powershell
+# Ejecuta un contenedor temporal que monta el repo en /app, instala dependencias y ejecuta la prueba
+docker-compose run --rm -v ${PWD}:/app descarga_datos /bin/bash -lc "python -m pip install -r /app/descarga_datos/requirements.txt && python -m unittest tests.test_pgvector_ingest_and_query -v"
+```
+
+Nota: en PowerShell, si `${PWD}` no funciona prueba con `${PWD}.Path`.
+
+2) Ejecutar la prueba en un contenedor ya en ejecución
+
+Si ya has levantado `descarga_datos` con `docker-compose up -d`, ejecuta:
+
+```powershell
+docker-compose exec descarga_datos /bin/bash -lc "python -m pip install -r /app/descarga_datos/requirements.txt && python -m unittest tests.test_pgvector_ingest_and_query -v"
+```
+
+3) Pruebas de integración contra la DB (`db`)
+
+La prueba incluida es ligera y NO requiere la base de datos. Si quieres ejecutar pruebas que necesiten conectarse a la base de datos, sigue estos pasos:
+
+- Levanta únicamente el servicio de base de datos y espera a que esté listo:
+
+```powershell
+docker-compose up -d db
+# Espera básica: comprueba repetidamente que el servicio PostgreSQL responde (ejemplo sencillo)
+while (-not (docker-compose exec db pg_isready -U $env:POSTGRES_USER -d $env:POSTGRES_DB)) { Start-Sleep -Seconds 1 }
+```
+
+- Luego ejecuta las pruebas (como en 1) o 2) ). Si las pruebas necesitan datos/esquema, asegúrate de inicializar la base con `init-sql/` o usando el script de carga de datos.
+
+Consejos y notas
+- `docker-compose run` conecta el contenedor a la red de Compose: dentro del contenedor el host `db` resolverá al servicio PostgreSQL.
+- Las variables de entorno definidas en `.env` se cargan automáticamente en los servicios que declaran `env_file: .env` (como `descarga_datos`).
