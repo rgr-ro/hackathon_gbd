@@ -10,6 +10,7 @@
   - [ ] O hacer un dump de la BBDD y apartir de ella generar los RDF (aplicando reglas `YARRRML` o `RML` para generacion de `ttl`s) hacerlo directamente en el script
   - [ ] Probar consultas de SPARQL
 - [ ] Organizar presentacion
+  - [ ] Montar un notebook que pueda consumir esta kk y mostrar las consultas
   - [ ] Preparar consultas demos
   - [ ] Preparar explicacion de la estructura
 
