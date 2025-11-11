@@ -51,7 +51,7 @@ UAM_NIFOC = "Q2818013A"
 UAM_URI = G2_UNI["UAM-Q2818013A"]
 
 # Ruta base a la carpeta de CSVs
-BASE_CSV_PATH = Path(__file__).parent.parent / "data" / "all_csv"
+BASE_CSV_PATH = Path(__file__).parent.parent / "data" / "csv" / "all_csv"
 
 
 # --- FUNCIÓN PARA AUTO-DETECTAR CSVs ---
@@ -607,10 +607,12 @@ def main():
 
         g.add((dataset_uri, DCAT.distribution, dist_uri))
         g.add((dist_uri, RDF.type, DCAT.Distribution))
-        g.add((dist_uri, DCTERMS.title, Literal(config["archivo_csv"])))
+        g.add((dist_uri, DCTERMS.title, Literal(config["archivo_csv"])) )
         g.add((dist_uri, DCAT.mediaType, Literal("text/csv")))
-        # Usamos una URL relativa local
-        g.add((dist_uri, DCAT.downloadURL, URIRef(f"./{config['archivo_csv']}")))
+        # Usamos una URL relativa local hacia data/csv/all_csv/<archivo>
+        rel_dir = BASE_CSV_PATH.relative_to(Path(__file__).parent.parent)
+        rel_download_path = rel_dir / Path(config["archivo_csv"]).name
+        g.add((dist_uri, DCAT.downloadURL, URIRef(str(rel_download_path))))
 
         # 3. Aplicar la EXTENSIÓN (propiedad 'año_fiscal')
         g.add(
