@@ -67,12 +67,16 @@ def to_pgvector_literal(vec: List[float]) -> str:
 
 
 def connect_db():
+    # When running inside the `load_data` container the compose file sets
+    # POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB.
+    # Prefer those, but fall back to the more generic PG* env vars used for
+    # local runs and then to reasonable defaults.
     params = {
-        "host": os.getenv("PGHOST", "localhost"),
-        "port": int(os.getenv("PGPORT", "5432")),
-        "user": os.getenv("PGUSER", "myuser"),
-        "password": os.getenv("PGPASSWORD", "mypassword"),
-        "dbname": os.getenv("PGDATABASE", "mydb"),
+        "host": os.getenv("POSTGRES_HOST", os.getenv("PGHOST", "localhost")),
+        "port": int(os.getenv("POSTGRES_PORT", os.getenv("PGPORT", "5432"))),
+        "user": os.getenv("POSTGRES_USER", os.getenv("PGUSER", "myuser")),
+        "password": os.getenv("POSTGRES_PASSWORD", os.getenv("PGPASSWORD", "mypassword")),
+        "dbname": os.getenv("POSTGRES_DB", os.getenv("PGDATABASE", "mydb")),
     }
     return psycopg2.connect(**params)
 
