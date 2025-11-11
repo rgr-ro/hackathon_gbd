@@ -1,7 +1,7 @@
 """Ingest CSV texts into Postgres (pgvector) and query them with natural-language queries.
 
 Two primary modes:
-  - ingest: read a CSV file, compute embeddings for a text column, and store rows in `documents` table
+  - ingest: read a CSV file, compute embeddings for a text column, and store rows in `LICITACION` table
   - query: compute an embedding for a user query and retrieve top-K similar documents using pgvector
 
 Usage (PowerShell):
@@ -15,7 +15,7 @@ Usage (PowerShell):
 Notes:
  - The script supports a lightweight deterministic `dummy` embedding (fast) or
    `transformer` mode using `sentence-transformers` (install separately).
- - The `documents` table will contain: id (serial if no id supplied), source_id (optional original id), text, embedding (vector(dim)).
+ - The `LICITACION` table will contain: id (serial if no id supplied), source_id (optional original id), text, embedding (vector(dim)).
 """
 
 from __future__ import annotations
@@ -78,21 +78,39 @@ def connect_db():
 
 
 def ensure_table(cur, dim: int):
+    # Ensure pgvector extension exists and LICITACION has an embedding column
     cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-    cur.execute(f"""
-    CREATE TABLE IF NOT EXISTS documents (
-        id serial PRIMARY KEY,
-        source_id text,
-        text text,
-        embedding vector({dim})
-    );
-    """)
+    cur.execute("SELECT to_regclass('public.LICITACION')")
+    exists = cur.fetchone()[0]
+    if not exists:
+        # create a minimal LICITACION table if it's missing (the repo's init.sql
+        # normally creates the full table)
+        cur.execute(f"CREATE TABLE LICITACION (identificador BIGINT, lote varchar(255), objeto_licitacion_o_lote text, embedding vector({dim}));")
+        return
+
+    # If table exists, ensure embedding column exists and has the expected dim
+    cur.execute("SELECT attname, atttypmod FROM pg_attribute WHERE attrelid = 'public.LICITACION'::regclass AND attname = 'embedding';")
+    info = cur.fetchone()
+    if not info:
+        cur.execute(f"ALTER TABLE LICITACION ADD COLUMN embedding vector({dim});")
+        return
+
+    _, atttypmod = info
+    try:
+        existing_dim = atttypmod - 4 if atttypmod is not None else None
+    except Exception:
+        existing_dim = None
+    if existing_dim and existing_dim != dim:
+        print(f"Warning: existing LICITACION.embedding dim={existing_dim} differs from required dim={dim}. Replacing column (will DROP existing embedding column).")
+        cur.execute("ALTER TABLE LICITACION DROP COLUMN embedding;")
+        cur.execute(f"ALTER TABLE LICITACION ADD COLUMN embedding vector({dim});")
 
 
-def ingest_csv(csv_path: str, text_col: str, id_col: Optional[str], mode: str, dim: int, **kwargs):
+def ingest_csv(csv_path: str, text_col: str, id_col: Optional[str], lote_col: Optional[str], mode: str, dim: int, **kwargs):
     # read CSV and collect texts
     texts_for_batch: List[str] = []
     source_ids: List[Optional[str]] = []
+    lote_vals: List[Optional[str]] = []
 
     with open(csv_path, newline='', encoding='utf-8') as fh:
         reader = csv.DictReader(fh)
@@ -101,8 +119,10 @@ def ingest_csv(csv_path: str, text_col: str, id_col: Optional[str], mode: str, d
         for row in reader:
             txt = row[text_col]
             sid = row[id_col] if id_col and id_col in row else None
+            lote = row[lote_col] if lote_col and lote_col in row else None
             texts_for_batch.append(txt)
             source_ids.append(sid)
+            lote_vals.append(lote)
 
     if not texts_for_batch:
         print("No rows found in CSV; nothing to ingest.")
@@ -125,22 +145,16 @@ def ingest_csv(csv_path: str, text_col: str, id_col: Optional[str], mode: str, d
     conn = connect_db()
     conn.autocommit = True
     cur = conn.cursor()
-
-    # ensure extension and table exist; if table exists check embedding dim
-    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
-
-    # create table if not exists
-    cur.execute("SELECT to_regclass('public.documents')")
+    # ensure LICITACION has embedding column with correct dim
+    cur.execute("SELECT to_regclass('public.LICITACION')")
     exists = cur.fetchone()[0]
     if not exists:
-        cur.execute(f"CREATE TABLE documents (id serial PRIMARY KEY, source_id text, text text, embedding vector({actual_dim}));")
+        cur.execute(f"CREATE TABLE LICITACION (identificador BIGINT, lote varchar(255), objeto_licitacion_o_lote text, embedding vector({actual_dim}));")
     else:
-        # table exists: check if embedding column exists and matches dimension
-        cur.execute("SELECT attname, atttypmod FROM pg_attribute WHERE attrelid = 'public.documents'::regclass AND attname = 'embedding';")
+        cur.execute("SELECT attname, atttypmod FROM pg_attribute WHERE attrelid = 'public.LICITACION'::regclass AND attname = 'embedding';")
         info = cur.fetchone()
         if not info:
-            # add embedding column
-            cur.execute(f"ALTER TABLE documents ADD COLUMN embedding vector({actual_dim});")
+            cur.execute(f"ALTER TABLE LICITACION ADD COLUMN embedding vector({actual_dim});")
         else:
             _, atttypmod = info
             try:
@@ -148,22 +162,36 @@ def ingest_csv(csv_path: str, text_col: str, id_col: Optional[str], mode: str, d
             except Exception:
                 existing_dim = None
             if existing_dim and existing_dim != actual_dim:
-                print(f"Warning: existing embedding dim={existing_dim} differs from actual dim={actual_dim}. Replacing column (will DROP existing embedding column).")
-                cur.execute("ALTER TABLE documents DROP COLUMN embedding;")
-                cur.execute(f"ALTER TABLE documents ADD COLUMN embedding vector({actual_dim});")
+                print(f"Warning: existing LICITACION.embedding dim={existing_dim} differs from actual dim={actual_dim}. Replacing column (will DROP existing embedding column).")
+                cur.execute("ALTER TABLE LICITACION DROP COLUMN embedding;")
+                cur.execute(f"ALTER TABLE LICITACION ADD COLUMN embedding vector({actual_dim});")
 
-    # prepare tuples for bulk insert
-    tuples = [(sid, txt, to_pgvector_literal(emb)) for sid, txt, emb in zip(source_ids, texts_for_batch, embeddings)]
+    # prepare tuples for bulk insert into LICITACION.
+    # Map: identificador (bigint) <= source_id (if numeric), lote <= lote_col, objeto_licitacion_o_lote <= text
+    def clean_ident(x):
+        if x is None or x == '':
+            return None
+        try:
+            return int(x)
+        except Exception:
+            return None
+
+    tuples = [(
+        clean_ident(sid),
+        lote_val if lote_val is not None else None,
+        txt,
+        to_pgvector_literal(emb)
+    ) for sid, lote_val, txt, emb in zip(source_ids, lote_vals, texts_for_batch, embeddings)]
 
     print(f"Inserting {len(tuples)} documents into DB...")
     # use execute_values for fast bulk insert; pass the literal vector string as text (psycopg2 will quote)
     execute_values(cur,
-                   "INSERT INTO documents (source_id, text, embedding) VALUES %s;",
+                   "INSERT INTO LICITACION (identificador, lote, objeto_licitacion_o_lote, embedding) VALUES %s;",
                    tuples)
 
     # try create an index
     try:
-        cur.execute("CREATE INDEX IF NOT EXISTS documents_embedding_idx ON documents USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);")
+        cur.execute("CREATE INDEX IF NOT EXISTS licitacion_embedding_idx ON LICITACION USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);")
     except Exception as e:
         print("Warning: index creation failed:", e)
 
@@ -189,13 +217,13 @@ def query_documents(query: str, mode: str, dim: int, k: int = 5, model_name: Opt
     conn = connect_db()
     cur = conn.cursor()
 
-    # Run similarity query using pgvector <-> operator
-    cur.execute("SELECT id, source_id, text, embedding <-> %s AS distance FROM documents ORDER BY distance LIMIT %s;", (qlit, k))
+    # Run similarity query using pgvector <-> operator against LICITACION
+    cur.execute("SELECT identificador, lote, objeto_licitacion_o_lote, embedding <-> %s AS distance FROM LICITACION ORDER BY distance LIMIT %s;", (qlit, k))
     rows = cur.fetchall()
 
-    print(f"Top {k} documents for query: {query!r}")
-    for rid, sid, text, dist in rows:
-        print(f"id={rid} source_id={sid} distance={dist:.6f}\n{text}\n---")
+    print(f"Top {k} LICITACION rows for query: {query!r}")
+    for identificador, lote, objeto, dist in rows:
+        print(f"identificador={identificador} lote={lote} distance={dist:.6f}\n{objeto}\n---")
 
     cur.close()
     conn.close()
@@ -208,7 +236,8 @@ def main():
     p_ingest = sub.add_parser('ingest')
     p_ingest.add_argument('--csv', required=True, help='Path to CSV file')
     p_ingest.add_argument('--text-col', required=True, help='Column name containing text')
-    p_ingest.add_argument('--id-col', required=False, help='Optional column to use as source_id')
+    p_ingest.add_argument('--id-col', required=False, help='Optional column to use as source_id (maps to LICITACION.identificador)')
+    p_ingest.add_argument('--lote-col', required=False, help='Optional column to use as lote (maps to LICITACION.lote)')
     p_ingest.add_argument('--mode', choices=['dummy', 'transformer'], default='dummy')
     p_ingest.add_argument('--dim', type=int, default=128, help='Embedding dim (dummy mode)')
     p_ingest.add_argument('--model', dest='model_name', help='SentenceTransformer model name to use when --mode transformer (default: paraphrase-multilingual-MiniLM-L12-v2)')
@@ -222,9 +251,9 @@ def main():
 
     args = parser.parse_args()
     if args.cmd == 'ingest':
-        ingest_csv(args.csv, args.text_col, args.id_col, args.mode, args.dim)
+        ingest_csv(args.csv, args.text_col, args.id_col, getattr(args, 'lote_col', None), args.mode, args.dim)
     elif args.cmd == 'query':
-        query_documents(args.q, args.mode, args.dim, args.k)
+        query_documents(args.q, args.mode, args.dim, args.k, getattr(args, 'model_name', None))
     else:
         parser.print_help()
 
