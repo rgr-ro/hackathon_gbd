@@ -2,6 +2,11 @@
 
 Proyecto de hackathon para gestión de datos de la Universidad Autónoma de Madrid utilizando PostgreSQL, pgVector y GraphDB.
 
+📘 **Documentación**:
+
+- [Guía Rápida (QUICKSTART)](QUICKSTART.md) - Inicio rápido paso a paso
+- [Arquitectura del Sistema (ARCHITECTURE)](ARCHITECTURE.md) - Diagramas y flujo de datos
+
 ## 🔍 TODO
 
 - [ ] Hacer todo el pgvector:
@@ -20,6 +25,8 @@ Proyecto de hackathon para gestión de datos de la Universidad Autónoma de Madr
 - [ ] Revisar el readme y limpiarlo (huele a Chatty 🤖🤖)
 
 ## 🚀 Inicio Rápido
+
+**Ver la guía completa**: [QUICKSTART.md](QUICKSTART.md) 📘
 
 ### Prerequisitos
 
@@ -59,9 +66,11 @@ Los servicios se ejecutan en el siguiente orden automáticamente:
 
 1. **db** (PostgreSQL) - Base de datos principal
 2. **descarga_datos** - Descarga archivos CSV de datos abiertos UAM
-3. **load_data** - Carga los CSV en PostgreSQL (NUEVO ✨)
-4. **pgadmin** - Interfaz web para PostgreSQL
-5. **graphdb** - Base de datos de grafos
+3. **load_data** - Carga los CSV en PostgreSQL ✨
+4. **create_graph** - Genera grafo RDF/TTL desde los CSVs ✨
+5. **upload_to_graphdb** - Sube el grafo TTL a GraphDB automáticamente ✨ NUEVO
+6. **pgadmin** - Interfaz web para PostgreSQL
+7. **graphdb** - Base de datos de grafos
 
 ### Verificar el Estado
 
@@ -122,6 +131,62 @@ Descarga automáticamente todos los CSV de datos abiertos de la UAM desde 2017 h
 ```
 
 Ver documentación completa en [load_data/README.md](load_data/README.md)
+
+### Generación de Grafo RDF (create_graph) ✨ NUEVO
+
+**Genera grafo RDF/TTL desde los CSVs con:**
+
+- Ontología personalizada (G2_ONT)
+- Metadatos DCAT (datasets y distribuciones)
+- Enlaces a recursos externos (DBpedia, Wikidata)
+- Relaciones entre entidades (universidades, licitaciones, ayudas, presupuestos)
+- Auto-descubrimiento de todos los CSVs
+
+**Gestión del servicio:**
+
+```bash
+# Desde el directorio create_graph/
+./manage.sh build      # Construir imagen
+./manage.sh run        # Generar grafo
+./manage.sh logs       # Ver logs
+./manage.sh status     # Ver estado y archivo generado
+./manage.sh validate   # Validar grafo TTL
+./manage.sh clean      # Limpiar
+```
+
+**Archivo generado:**
+
+- `data/ttl/grafo_completo.ttl` - Grafo RDF completo listo para GraphDB
+
+Ver documentación completa en [create_graph/README.md](create_graph/README.md)
+
+### Upload a GraphDB (upload_to_graphdb) ✨ NUEVO
+
+**Sube automáticamente el grafo TTL a GraphDB:**
+
+- Espera a que GraphDB esté disponible
+- Crea repositorio `uam_data` (si no existe)
+- Sube el archivo TTL completo
+- Muestra estadísticas (número de triples)
+- Proceso completamente automatizado
+
+**Uso:**
+
+```bash
+# Con docker-compose (automático)
+docker compose up upload_to_graphdb
+
+# Ver logs
+docker compose logs upload_to_graphdb
+```
+
+**Verificación:**
+
+1. Accede a GraphDB: http://localhost:8000
+2. Selecciona repositorio: `uam_data`
+3. Ejecuta consulta: `SELECT (COUNT(*) as ?total) WHERE { ?s ?p ?o }`
+
+Ver documentación completa en [upload_to_graphdb/README.md](upload_to_graphdb/README.md)
 
 ## 📊 Estructura de Datos
 
