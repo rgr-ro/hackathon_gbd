@@ -12,7 +12,7 @@ from pathlib import Path
 import requests
 
 # Configuración
-GRAPHDB_URL = os.getenv("GRAPHDB_URL", "http://graphdb:7200")
+GRAPHDB_URL = os.getenv("GRAPHDB_URL", "http://graphdb:8000")
 REPOSITORY_ID = os.getenv("REPOSITORY_ID", "uam_data")
 TTL_FILE = os.getenv("TTL_FILE", "/app/data/ttl/grafo_completo.ttl")
 MAX_RETRIES = 30
@@ -83,13 +83,13 @@ def create_repository():
         repo_id=REPOSITORY_ID, repo_label=f"UAM Data Repository - {REPOSITORY_ID}"
     )
 
-    headers = {"Content-Type": "text/turtle"}
+    # GraphDB espera multipart/form-data con el archivo de configuración
+    files = {"config": ("config.ttl", repo_config, "text/turtle")}
 
     try:
         response = requests.post(
             f"{GRAPHDB_URL}/rest/repositories",
-            data=repo_config,
-            headers=headers,
+            files=files,
             timeout=30,
         )
 
