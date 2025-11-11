@@ -35,12 +35,33 @@ import psycopg2
 import psycopg2.extras as extras
 import importlib.util
 
+# Try to import sentence-transformers for embeddings
+HAS_TRANSFORMERS = False
+try:
+    from sentence_transformers import SentenceTransformer
+    HAS_TRANSFORMERS = True
+except ImportError:
+    HAS_TRANSFORMERS = False
+    print("Warning: sentence-transformers not installed. Embeddings will not be computed.")
+
 # --- File paths (relative to repo root) ---
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Constants for mapping licitaciones -> universidad
 UAM_COD = "023"
 UAM_NIF = "Q2818013A"
+
+
+def to_pgvector_literal(vec):
+    """Convert a list of floats to pgvector literal format."""
+    return "[" + ",".join(f"{float(x):.10f}" for x in vec) + "]"
+
+
+def compute_transformer_embeddings(model, texts):
+    """Compute embeddings using sentence-transformers model."""
+    embeddings = model.encode(texts, convert_to_numpy=False, show_progress_bar=True)
+    # Normalize to list of lists
+    return [list(emb) for emb in embeddings]
 
 
 def to_decimal(s):
@@ -209,7 +230,8 @@ CREATE TABLE LICITACION (
     identificador_adjudicatario_de_la_licitacion_o_lote VARCHAR(255),
     objeto_licitacion_o_lote TEXT,
     link_licitacion TEXT,
-    descripcion_de_la_financiacion_europea TEXT
+    descripcion_de_la_financiacion_europea TEXT,
+    embedding vector(384)
 );
 
 CREATE TABLE CONVOCATORIA_AYUDA (
@@ -232,6 +254,7 @@ CREATE TABLE AYUDA (
 
 
 def create_tables(cur):
+    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
     cur.execute(DDL_SQL)
 
 
@@ -436,9 +459,21 @@ def load_licitacion(conn, csv_files):
     total_skipped_dups = 0
     total_skipped_nif = 0
 
+    # Initialize the transformer model if available
+    model = None
+    if HAS_TRANSFORMERS:
+        try:
+            print("Loading sentence-transformers model 'all-MiniLM-L6-v2' (this may take a while)...")
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            print("Model loaded successfully.")
+        except Exception as e:
+            print(f"Warning: failed to load transformer model: {e}")
+            model = None
+
     for csv_path in csv_files:
         print(f"Loading LICITACION from {csv_path}")
         rows = []
+        texts_for_embedding = []
         kept = 0
         skipped_dups = 0
         skipped_nif = 0
@@ -454,6 +489,12 @@ def load_licitacion(conn, csv_files):
                     skipped_dups += 1
                     continue  # keep first occurrence only to respect ER PK
                 seen_ids.add(ident)
+                
+                # Extract text fields for embedding
+                objeto = (r.get("objeto_licitacion_o_lote") or "").strip()
+                descripcion = (r.get("descripcion_de_la_financiacion_europea") or "").strip()
+                combined_text = (objeto + "\n" + descripcion).strip() if (objeto or descripcion) else ""
+                
                 rows.append(
                     (
                         to_int(ident),
@@ -472,13 +513,36 @@ def load_licitacion(conn, csv_files):
                             r.get("identificador_adjudicatario_de_la_licitacion_o_lote")
                             or ""
                         ).strip(),
-                        (r.get("objeto_licitacion_o_lote") or "").strip(),
+                        objeto,
                         (r.get("link_licitacion") or "").strip(),
-                        (r.get("descripcion_de_la_financiacion_europea") or "").strip(),
+                        descripcion,
                     )
                 )
+                texts_for_embedding.append(combined_text)
                 kept += 1
+        
         if rows:
+            # Compute embeddings in batch if model is available
+            embeddings = []
+            if model is not None and texts_for_embedding:
+                print(f"Computing embeddings for {len(texts_for_embedding)} LICITACION rows...")
+                try:
+                    embeddings = compute_transformer_embeddings(model, texts_for_embedding)
+                    print(f"Embeddings computed successfully. Dimension: {len(embeddings[0])}")
+                except Exception as e:
+                    print(f"Warning: failed to compute embeddings: {e}")
+                    embeddings = []
+            
+            # Prepare rows with embeddings
+            rows_with_embeddings = []
+            for i, row in enumerate(rows):
+                if embeddings and i < len(embeddings):
+                    emb_literal = to_pgvector_literal(embeddings[i])
+                    rows_with_embeddings.append(row + (emb_literal,))
+                else:
+                    rows_with_embeddings.append(row + (None,))
+            
+            # Insert rows into database
             with conn.cursor() as cur:
                 extras.execute_values(
                     cur,
@@ -491,46 +555,25 @@ def load_licitacion(conn, csv_files):
                         identificador_adjudicatario_de_la_licitacion_o_lote,
                         objeto_licitacion_o_lote,
                         link_licitacion,
-                        descripcion_de_la_financiacion_europea
+                        descripcion_de_la_financiacion_europea,
+                        embedding
                     ) VALUES %s
                     """,
-                    rows,
+                    rows_with_embeddings,
                 )
-            # After inserting rows, compute embeddings for the text fields
-            # using the embedding utilities from scripts/pgvector_ingest_and_query.py
-            try:
-                script_path = os.path.join(ROOT, 'scripts', 'pgvector_ingest_and_query.py')
-                spec = importlib.util.spec_from_file_location('pgvector_ingest_and_query', script_path)
-                pgvec = importlib.util.module_from_spec(spec)
-                spec.loader.exec_module(pgvec)
-            except Exception as e:
-                print(f"Warning: could not import pgvector utilities: {e}")
-                pgvec = None
-
-            if pgvec is not None:
-                with conn.cursor() as cur:
-                    # ensure embedding column exists with a default dim
-                    try:
-                        pgvec.ensure_table(cur, 128)
-                    except Exception:
-                        # ignore ensure_table errors and continue
-                        pass
-
-                    # For each inserted row, compute embedding and update the row
-                    for r in rows:
-                        ident = r[0]
-                        objeto = r[7] or ""
-                        descripcion = r[9] or ""
-                        text = (objeto + "\n" + descripcion).strip() if (objeto or descripcion) else ""
-                        try:
-                            emb = pgvec.dummy_embedding(text, dim=128)
-                            lit = pgvec.to_pgvector_literal(emb)
-                            cur.execute(
-                                "UPDATE LICITACION SET embedding = %s WHERE identificador = %s",
-                                (lit, ident),
-                            )
-                        except Exception as e:
-                            print(f"Warning: failed to compute/update embedding for id {ident}: {e}")
+            
+            # Create index for efficient similarity search if embeddings were added
+            if embeddings:
+                print("Creating vector index for similarity search...")
+                try:
+                    with conn.cursor() as cur:
+                        cur.execute(
+                            "CREATE INDEX IF NOT EXISTS licitacion_embedding_idx ON LICITACION USING ivfflat (embedding vector_l2_ops) WITH (lists = 100);"
+                        )
+                    print("Vector index created successfully.")
+                except Exception as e:
+                    print(f"Warning: failed to create vector index: {e}")
+        
         total_kept += kept
         total_skipped_nif += skipped_nif
         total_skipped_dups += skipped_dups
