@@ -33,6 +33,7 @@ from decimal import Decimal, InvalidOperation
 
 import psycopg2
 import psycopg2.extras as extras
+import importlib.util
 
 # --- File paths (relative to repo root) ---
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -495,6 +496,41 @@ def load_licitacion(conn, csv_files):
                     """,
                     rows,
                 )
+            # After inserting rows, compute embeddings for the text fields
+            # using the embedding utilities from scripts/pgvector_ingest_and_query.py
+            try:
+                script_path = os.path.join(ROOT, 'scripts', 'pgvector_ingest_and_query.py')
+                spec = importlib.util.spec_from_file_location('pgvector_ingest_and_query', script_path)
+                pgvec = importlib.util.module_from_spec(spec)
+                spec.loader.exec_module(pgvec)
+            except Exception as e:
+                print(f"Warning: could not import pgvector utilities: {e}")
+                pgvec = None
+
+            if pgvec is not None:
+                with conn.cursor() as cur:
+                    # ensure embedding column exists with a default dim
+                    try:
+                        pgvec.ensure_table(cur, 128)
+                    except Exception:
+                        # ignore ensure_table errors and continue
+                        pass
+
+                    # For each inserted row, compute embedding and update the row
+                    for r in rows:
+                        ident = r[0]
+                        objeto = r[7] or ""
+                        descripcion = r[9] or ""
+                        text = (objeto + "\n" + descripcion).strip() if (objeto or descripcion) else ""
+                        try:
+                            emb = pgvec.dummy_embedding(text, dim=128)
+                            lit = pgvec.to_pgvector_literal(emb)
+                            cur.execute(
+                                "UPDATE LICITACION SET embedding = %s WHERE identificador = %s",
+                                (lit, ident),
+                            )
+                        except Exception as e:
+                            print(f"Warning: failed to compute/update embedding for id {ident}: {e}")
         total_kept += kept
         total_skipped_nif += skipped_nif
         total_skipped_dups += skipped_dups

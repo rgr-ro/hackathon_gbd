@@ -117,6 +117,7 @@ services:
           --user $${POSTGRES_USER} \
           --password $${POSTGRES_PASSWORD} \
           --dbname $${POSTGRES_DB}
+        exec tail -f /dev/null
     depends_on:
       - db
       - descarga_datos
