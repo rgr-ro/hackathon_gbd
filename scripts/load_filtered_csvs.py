@@ -30,6 +30,7 @@ import os
 import sys
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
+from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras as extras
@@ -132,8 +133,52 @@ def connect_db(args):
         password=args.password,
         dbname=args.dbname,
     )
+    # Ensure the client encoding is UTF8 so text sent to Postgres is stored as UTF-8
+    conn.set_client_encoding('UTF8')
     conn.autocommit = False
     return conn
+
+
+@contextmanager
+def csv_open_reader(csv_path):
+    """Context manager that yields a csv.DictReader opened with a best-effort
+    UTF-8 encoding. It tries encodings in order: utf-8-sig, utf-8, latin1.
+    This avoids UnicodeDecodeError when CSVs have different encodings and
+    ensures text rows are returned as Python str (UTF-8 decoded).
+    """
+    encodings = ("utf-8-sig", "utf-8", "latin1")
+    last_exc = None
+    f = None
+    for enc in encodings:
+        try:
+            f = open(csv_path, "r", encoding=enc, newline="")
+            reader = csv.DictReader(f)
+            yield reader
+            return
+        except UnicodeDecodeError as e:
+            last_exc = e
+            if f:
+                try:
+                    f.close()
+                except Exception:
+                    pass
+            f = None
+            continue
+    # If all encodings failed to decode without error, fall back to latin1 to
+    # at least provide a best-effort decoding (latin1 never fails).
+    if f is None:
+        f = open(csv_path, "r", encoding="latin1", newline="")
+        reader = csv.DictReader(f)
+        try:
+            yield reader
+        finally:
+            f.close()
+    else:
+        # Close file if we somehow exited loop without yielding
+        try:
+            f.close()
+        except Exception:
+            pass
 
 
 def discover_csv_files(csv_dir):
@@ -272,8 +317,7 @@ def load_gastos(conn, csv_files):
     for csv_path in csv_files:
         print(f"Loading PRESUPUESTO_GASTOS from {csv_path}")
         rows = []
-        with open(csv_path, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
+        with csv_open_reader(csv_path) as reader:
             for r in reader:
                 cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
                 # Normalize UAM code: "23" -> "023"
@@ -313,8 +357,7 @@ def load_ingresos(conn, csv_files):
     for csv_path in csv_files:
         print(f"Loading PRESUPUESTO_INGRESOS from {csv_path}")
         rows = []
-        with open(csv_path, "r", encoding="utf-8", newline="") as f:
-            reader = csv.DictReader(f)
+        with csv_open_reader(csv_path) as reader:
             for r in reader:
                 cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
                 # Normalize UAM code: "23" -> "023"
@@ -354,8 +397,7 @@ def load_convocatoria(conn, csv_files):
     for csv_path in csv_files:
         print(f"Loading CONVOCATORIA_AYUDA from {csv_path}")
         rows = []
-        with open(csv_path, "r", encoding="latin1", newline="") as f:
-            reader = csv.DictReader(f)
+        with csv_open_reader(csv_path) as reader:
             for r in reader:
                 cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
                 # Normalize UAM code: "23" -> "023"
@@ -407,8 +449,7 @@ def load_ayuda(conn, csv_files):
         kept = 0
         skipped_empty = 0
         skipped_missing_fk = 0
-        with open(csv_path, "r", encoding="latin1", newline="") as f:
-            reader = csv.DictReader(f)
+        with csv_open_reader(csv_path) as reader:
             for r in reader:
                 cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
                 # Normalize UAM code: "23" -> "023"
@@ -477,8 +518,7 @@ def load_licitacion(conn, csv_files):
         kept = 0
         skipped_dups = 0
         skipped_nif = 0
-        with open(csv_path, "r", encoding="latin1", newline="") as f:
-            reader = csv.DictReader(f)
+        with csv_open_reader(csv_path) as reader:
             for r in reader:
                 nif = (r.get("nif_oc") or "").strip()
                 if nif != UAM_NIF:
