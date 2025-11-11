@@ -158,12 +158,11 @@ services:
     container_name: upload_to_graphdb
     restart: "no"
     environment:
-      GRAPHDB_URL: "http://graphdb:7200"
+      GRAPHDB_URL: "http://graphdb:8000"
       REPOSITORY_ID: "uam_data"
-      TTL_FILE: "/app/data/ttl/grafo_completo.ttl"
+      TTL_FILE: "/data/ttl/grafo_completo.ttl"
     volumes:
-      - ./data/ttl:/app/data/ttl:ro
-      - ./upload_to_graphdb:/app:ro
+      - ./data/ttl:/data/ttl:ro
     working_dir: /app
     depends_on:
       - graphdb

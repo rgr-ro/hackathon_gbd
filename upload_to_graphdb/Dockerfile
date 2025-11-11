@@ -10,5 +10,7 @@ RUN apt-get update && \
 # Instalar requests para Python
 RUN pip install --no-cache-dir requests
 
-# El script se montará como volumen
+# Copiar el script de upload al contenedor
+COPY upload_script.py /app/
+
 CMD ["python", "upload_script.py"]
