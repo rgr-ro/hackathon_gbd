@@ -4,4 +4,4 @@ pandas==2.2.2
 psycopg2-binary>=2.9
 
 # Optional (comentado) para embeddings multilingües
-# sentence-transformers==2.2.2
+sentence-transformers==2.2.2
