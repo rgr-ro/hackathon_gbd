@@ -124,6 +124,53 @@ services:
     networks:
       - gestbd_net
 
+  create_graph:
+    build:
+      context: ./create_graph
+      dockerfile: Dockerfile
+    image: create_graph:latest
+    container_name: create_graph
+    restart: "no"
+    volumes:
+      - ./data/csv/all_csv:/app/data/csv/all_csv:ro
+      - ./data/ttl:/app/data/ttl:rw
+      - ./scripts:/app/scripts:ro
+    working_dir: /app
+    command:
+      - /bin/bash
+      - -c
+      - |
+        echo 'Esperando a que descarga_datos complete...'
+        sleep 15
+        echo 'Iniciando generación del grafo RDF...'
+        python scripts/create_graph.py --output-dir /app/data/ttl
+        echo 'Grafo RDF generado exitosamente'
+    depends_on:
+      - descarga_datos
+    networks:
+      - gestbd_net
+
+  upload_to_graphdb:
+    build:
+      context: ./upload_to_graphdb
+      dockerfile: Dockerfile
+    image: upload_to_graphdb:latest
+    container_name: upload_to_graphdb
+    restart: "no"
+    environment:
+      GRAPHDB_URL: "http://graphdb:7200"
+      REPOSITORY_ID: "uam_data"
+      TTL_FILE: "/app/data/ttl/grafo_completo.ttl"
+    volumes:
+      - ./data/ttl:/app/data/ttl:ro
+      - ./upload_to_graphdb:/app:ro
+    working_dir: /app
+    depends_on:
+      - graphdb
+      - create_graph
+    networks:
+      - gestbd_net
+
 volumes:
   db_data:
   pgadmin_data:

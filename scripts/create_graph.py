@@ -1,3 +1,4 @@
+import argparse
 import csv
 import os
 import re
@@ -509,6 +510,22 @@ FUNCIONES_PROCESADO = {
 
 # --- 4. SCRIPT PRINCIPAL ---
 def main():
+    # Argumentos de línea de comandos
+    parser = argparse.ArgumentParser(description="Generar grafo RDF desde archivos CSV")
+    parser.add_argument(
+        "--output-dir",
+        type=str,
+        default=".",
+        help="Directorio donde guardar el archivo TTL (default: directorio actual)",
+    )
+    parser.add_argument(
+        "--output-file",
+        type=str,
+        default="grafo_completo.ttl",
+        help="Nombre del archivo de salida (default: grafo_completo.ttl)",
+    )
+    args = parser.parse_args()
+
     # Generar catálogo automáticamente desde la carpeta
     CATALOGO_CONFIG = generar_catalogo_config()
 
@@ -630,7 +647,7 @@ def main():
 
         g.add((dataset_uri, DCAT.distribution, dist_uri))
         g.add((dist_uri, RDF.type, DCAT.Distribution))
-        g.add((dist_uri, DCTERMS.title, Literal(config["archivo_csv"])) )
+        g.add((dist_uri, DCTERMS.title, Literal(config["archivo_csv"])))
         g.add((dist_uri, DCAT.mediaType, Literal("text/csv")))
         # Usamos una URL relativa local hacia data/csv/all_csv/<archivo>
         rel_dir = BASE_CSV_PATH.relative_to(Path(__file__).parent.parent)
@@ -670,10 +687,16 @@ def main():
     print("--- Tarea 2 Completada ---")
 
     # --- 5. Guardar el grafo completo ---
-    output_file = "grafo_completo.ttl"
+    # Crear el directorio de salida si no existe
+    output_dir = Path(args.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+
+    output_file = output_dir / args.output_file
     try:
-        g.serialize(destination=output_file, format="turtle")
+        g.serialize(destination=str(output_file), format="turtle")
         print(f"\n¡ÉXITO! Grafo RDF total guardado en {output_file}")
+        print(f"Ubicación absoluta: {output_file.absolute()}")
+        print(f"Tamaño: {output_file.stat().st_size / 1024:.2f} KB")
         print("Sube este único fichero a tu repositorio de GraphDB.")
     except Exception as e:
         print(f"\nERROR al guardar el fichero: {e}")

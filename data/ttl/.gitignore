@@ -1,0 +1,5 @@
+# Ignorar archivos TTL generados (pueden ser muy grandes)
+*.ttl
+
+# Mantener el README
+!README.md
