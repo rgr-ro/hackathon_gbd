@@ -10,9 +10,10 @@ Proyecto de hackathon para gestión de datos de la Universidad Autónoma de Madr
 ## 🔍 TODO
 
 - [ ] Hacer todo el pgvector:
-  - [ ] creacion/modificacion de tablas para meter los embeddings
-  - [ ] Modificar los scripts para coger el texto de los csv y que los inserte en la tabla correspondiente
-  - [ ] probar la busqueda semantica por consola
+  - [x] creacion/modificacion de tablas para meter los embeddings
+  - [x] Modificar los scripts para coger el texto de los csv y que los inserte en la tabla correspondiente
+  - [x] probar la busqueda semantica por consola
+  - [ ] agregar consultas a notebook (hacer que el script sea ejecutable desde afuera)
 - [ ] Adaptar scripts para que coja los csv y los inyecte en el postgresql
 - [ ] Apartado de graphdb
   - [ ] Probar el rdf si vale la pena hacerlos a partir de los csv o a partir de la tabla sql
