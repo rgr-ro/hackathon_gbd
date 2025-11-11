@@ -76,8 +76,8 @@ services:
       - /bin/bash
       - -c
       - |
-        python /app/descarga_datos.py &
-#          exec tail -f /dev/null
+        python /app/descarga_datos.py
+#         & exec tail -f /dev/null
     stdin_open: true
     tty: true
     networks:
