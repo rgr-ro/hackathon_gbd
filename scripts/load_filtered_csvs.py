@@ -4,6 +4,7 @@ Load filtered CSV data into PostgreSQL according to the provided ER model.
 - Filters only the required columns from each CSV
 - Creates tables (DROP + CREATE) following the ER
 - Inserts data with correct type/encoding conversions
+- Auto-discovers CSV files by pattern matching
 
 Assumptions
 - Year (anio) is stored as INT (year number)
@@ -14,10 +15,13 @@ Assumptions
 - cod_universidad for UAM is '023' and NIF (nifoc) in licitaciones is 'Q2818013A'
 
 Usage:
+  # Load from data/csv/ (default)
   python scripts/load_filtered_csvs.py \
     --host localhost --port 5432 --user postgres --password postgres --dbname postgres
 
-Relies on CSVs located under data/csv/ in the repository root.
+  # Load from data/csv/all_csv/
+  python scripts/load_filtered_csvs.py --csv-dir data/csv/all_csv \
+    --host localhost --port 5432 --user postgres --password postgres --dbname postgres
 """
 
 import argparse
@@ -32,13 +36,6 @@ import psycopg2.extras as extras
 
 # --- File paths (relative to repo root) ---
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
-CSV_DIR = os.path.join(ROOT, "data", "csv")
-
-CSV_GASTOS = os.path.join(CSV_DIR, "uam-presupuesto-de-gastos-cierre-2017_1.csv")
-CSV_INGRESOS = os.path.join(CSV_DIR, "uam-presupuesto-de-ingresos-cierre-2017_0.csv")
-CSV_CONV = os.path.join(CSV_DIR, "uam-conv-ayudas-2017-18.csv")
-CSV_AYUDA = os.path.join(CSV_DIR, "uam-ayudas-2017-18-anonimizado.csv")
-CSV_LICIT = os.path.join(CSV_DIR, "uam-licitaciones-contratos-mayores-2019.csv")
 
 # Constants for mapping licitaciones -> universidad
 UAM_COD = "023"
@@ -115,6 +112,51 @@ def connect_db(args):
     )
     conn.autocommit = False
     return conn
+
+
+def discover_csv_files(csv_dir):
+    """
+    Discover CSV files in the given directory by pattern matching.
+    Returns dict with keys: 'gastos', 'ingresos', 'convocatorias', 'ayudas', 'licitaciones'
+    Each value is a list of file paths.
+    """
+    csv_dir_abs = os.path.abspath(csv_dir)
+    if not os.path.isdir(csv_dir_abs):
+        print(f"ERROR: CSV directory not found: {csv_dir_abs}", file=sys.stderr)
+        sys.exit(1)
+
+    all_files = [
+        os.path.join(csv_dir_abs, f)
+        for f in os.listdir(csv_dir_abs)
+        if f.endswith(".csv")
+    ]
+
+    discovered = {
+        "gastos": [],
+        "ingresos": [],
+        "convocatorias": [],
+        "ayudas": [],
+        "licitaciones": [],
+    }
+
+    for path in all_files:
+        fname = os.path.basename(path).lower()
+        if "presupuesto-de-gastos" in fname or "presupuesto_de_gastos" in fname:
+            discovered["gastos"].append(path)
+        elif "presupuesto-de-ingresos" in fname or "presupuesto_de_ingresos" in fname:
+            discovered["ingresos"].append(path)
+        elif "conv-ayudas" in fname or "conv_ayudas" in fname:
+            discovered["convocatorias"].append(path)
+        elif "ayudas" in fname and "conv" not in fname:
+            discovered["ayudas"].append(path)
+        elif "licitaciones" in fname or "contratos-mayores" in fname:
+            discovered["licitaciones"].append(path)
+
+    # Sort files for deterministic order
+    for key in discovered:
+        discovered[key].sort()
+
+    return discovered
 
 
 DDL_SQL = r"""
@@ -200,100 +242,130 @@ def seed_universidad(cur):
     )
 
 
-def load_gastos(conn):
-    print("Loading PRESUPUESTO_GASTOS from", CSV_GASTOS)
-    rows = []
-    with open(CSV_GASTOS, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(
-                (
-                    (r.get("cod_universidad") or "").strip().strip('"'),
-                    to_int(r.get("anio")),
-                    (r.get("des_capitulo") or "").strip(),
-                    (r.get("des_articulo") or "").strip(),
-                    (r.get("des_concepto") or "").strip(),
-                    to_decimal(r.get("credito_inicial")),
-                    to_decimal(r.get("modificaciones")),
-                    to_decimal(r.get("credito_total")),
+def load_gastos(conn, csv_files):
+    """Load PRESUPUESTO_GASTOS from one or more CSV files."""
+    total_rows = 0
+    for csv_path in csv_files:
+        print(f"Loading PRESUPUESTO_GASTOS from {csv_path}")
+        rows = []
+        with open(csv_path, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
+                # Normalize UAM code: "23" -> "023"
+                if cod_univ == "23":
+                    cod_univ = UAM_COD
+                rows.append(
+                    (
+                        cod_univ,
+                        to_int(r.get("anio")),
+                        (r.get("des_capitulo") or "").strip(),
+                        (r.get("des_articulo") or "").strip(),
+                        (r.get("des_concepto") or "").strip(),
+                        to_decimal(r.get("credito_inicial")),
+                        to_decimal(r.get("modificaciones")),
+                        to_decimal(r.get("credito_total")),
+                    )
                 )
+        with conn.cursor() as cur:
+            extras.execute_values(
+                cur,
+                """
+                INSERT INTO PRESUPUESTO_GASTOS (
+                    cod_universidad, anio, des_capitulo, des_articulo, des_concepto,
+                    credito_inicial, modificaciones, credito_total
+                ) VALUES %s
+                """,
+                rows,
             )
-    with conn.cursor() as cur:
-        extras.execute_values(
-            cur,
-            """
-            INSERT INTO PRESUPUESTO_GASTOS (
-                cod_universidad, anio, des_capitulo, des_articulo, des_concepto,
-                credito_inicial, modificaciones, credito_total
-            ) VALUES %s
-            """,
-            rows,
-        )
+        total_rows += len(rows)
+        print(f"  -> Inserted {len(rows)} rows from {os.path.basename(csv_path)}")
+    print(f"Total PRESUPUESTO_GASTOS: {total_rows} rows")
 
 
-def load_ingresos(conn):
-    print("Loading PRESUPUESTO_INGRESOS from", CSV_INGRESOS)
-    rows = []
-    with open(CSV_INGRESOS, "r", encoding="utf-8", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(
-                (
-                    (r.get("cod_universidad") or "").strip().strip('"'),
-                    to_int(r.get("anio")),
-                    (r.get("des_capitulo") or "").strip(),
-                    (r.get("des_articulo") or "").strip(),
-                    (r.get("des_concepto") or "").strip(),
-                    to_decimal(r.get("credito_inicial")),
-                    to_decimal(r.get("modificaciones")),
-                    to_decimal(r.get("credito_total")),
+def load_ingresos(conn, csv_files):
+    """Load PRESUPUESTO_INGRESOS from one or more CSV files."""
+    total_rows = 0
+    for csv_path in csv_files:
+        print(f"Loading PRESUPUESTO_INGRESOS from {csv_path}")
+        rows = []
+        with open(csv_path, "r", encoding="utf-8", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
+                # Normalize UAM code: "23" -> "023"
+                if cod_univ == "23":
+                    cod_univ = UAM_COD
+                rows.append(
+                    (
+                        cod_univ,
+                        to_int(r.get("anio")),
+                        (r.get("des_capitulo") or "").strip(),
+                        (r.get("des_articulo") or "").strip(),
+                        (r.get("des_concepto") or "").strip(),
+                        to_decimal(r.get("credito_inicial")),
+                        to_decimal(r.get("modificaciones")),
+                        to_decimal(r.get("credito_total")),
+                    )
                 )
+        with conn.cursor() as cur:
+            extras.execute_values(
+                cur,
+                """
+                INSERT INTO PRESUPUESTO_INGRESOS (
+                    cod_universidad, anio, des_capitulo, des_articulo, des_concepto,
+                    credito_inicial, modificaciones, credito_total
+                ) VALUES %s
+                """,
+                rows,
             )
-    with conn.cursor() as cur:
-        extras.execute_values(
-            cur,
-            """
-            INSERT INTO PRESUPUESTO_INGRESOS (
-                cod_universidad, anio, des_capitulo, des_articulo, des_concepto,
-                credito_inicial, modificaciones, credito_total
-            ) VALUES %s
-            """,
-            rows,
-        )
+        total_rows += len(rows)
+        print(f"  -> Inserted {len(rows)} rows from {os.path.basename(csv_path)}")
+    print(f"Total PRESUPUESTO_INGRESOS: {total_rows} rows")
 
 
-def load_convocatoria(conn):
-    print("Loading CONVOCATORIA_AYUDA from", CSV_CONV)
-    rows = []
-    with open(CSV_CONV, "r", encoding="latin1", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            rows.append(
-                (
-                    (r.get("cod_convocatoria") or "").strip(),
-                    (r.get("cod_universidad") or "").strip().strip('"'),
-                    (r.get("nombre_convocatoria") or "").strip(),
-                    parse_date_yyyymmdd(r.get("fecha_inicio_solicitudes")),
-                    parse_date_yyyymmdd(r.get("fecha_fin_solicitudes")),
-                    (r.get("des_categoria") or "").strip(),
+def load_convocatoria(conn, csv_files):
+    """Load CONVOCATORIA_AYUDA from one or more CSV files."""
+    total_rows = 0
+    for csv_path in csv_files:
+        print(f"Loading CONVOCATORIA_AYUDA from {csv_path}")
+        rows = []
+        with open(csv_path, "r", encoding="latin1", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
+                # Normalize UAM code: "23" -> "023"
+                if cod_univ == "23":
+                    cod_univ = UAM_COD
+                rows.append(
+                    (
+                        (r.get("cod_convocatoria") or "").strip(),
+                        cod_univ,
+                        (r.get("nombre_convocatoria") or "").strip(),
+                        parse_date_yyyymmdd(r.get("fecha_inicio_solicitudes")),
+                        parse_date_yyyymmdd(r.get("fecha_fin_solicitudes")),
+                        (r.get("des_categoria") or "").strip(),
+                    )
                 )
+        with conn.cursor() as cur:
+            extras.execute_values(
+                cur,
+                """
+                INSERT INTO CONVOCATORIA_AYUDA (
+                    cod_convocatoria, cod_universidad, nombre_convocatoria,
+                    fecha_inicio_solicitudes, fecha_fin_solicitudes, des_categoria
+                ) VALUES %s
+                ON CONFLICT (cod_convocatoria) DO NOTHING
+                """,
+                rows,
             )
-    with conn.cursor() as cur:
-        extras.execute_values(
-            cur,
-            """
-            INSERT INTO CONVOCATORIA_AYUDA (
-                cod_convocatoria, cod_universidad, nombre_convocatoria,
-                fecha_inicio_solicitudes, fecha_fin_solicitudes, des_categoria
-            ) VALUES %s
-            ON CONFLICT (cod_convocatoria) DO NOTHING
-            """,
-            rows,
-        )
+        total_rows += len(rows)
+        print(f"  -> Inserted {len(rows)} rows from {os.path.basename(csv_path)}")
+    print(f"Total CONVOCATORIA_AYUDA: {total_rows} rows")
 
 
-def load_ayuda(conn):
-    print("Loading AYUDA from", CSV_AYUDA)
+def load_ayuda(conn, csv_files):
+    """Load AYUDA from one or more CSV files."""
     # Obtener las convocatorias válidas ya insertadas
     valid_conv = set()
     with conn.cursor() as cur:
@@ -301,107 +373,137 @@ def load_ayuda(conn):
         for (code,) in cur.fetchall():
             valid_conv.add(code)
 
-    rows = []
-    kept = 0
-    skipped_empty = 0
-    skipped_missing_fk = 0
-    with open(CSV_AYUDA, "r", encoding="latin1", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
-            cod_conv = (r.get("cod_convocatoria_ayuda") or "").strip()
-            if not cod_conv:
-                skipped_empty += 1
-                continue
-            if cod_conv not in valid_conv:
-                skipped_missing_fk += 1
-                continue
-            rows.append(
-                (
-                    cod_univ,
-                    cod_conv,
-                    to_decimal(r.get("cuantia_total")),
-                    None,  # fecha_concesion not present -> NULL
-                )
-            )
-            kept += 1
-    print(
-        f"AYUDA: kept {kept}, skipped empty conv {skipped_empty}, skipped missing FK {skipped_missing_fk}"
-    )
-    if rows:
-        with conn.cursor() as cur:
-            extras.execute_values(
-                cur,
-                """
-                INSERT INTO AYUDA (
-                    cod_universidad, cod_convocatoria_ayuda, cuantia_total, fecha_concesion
-                ) VALUES %s
-                """,
-                rows,
-            )
+    total_kept = 0
+    total_skipped_empty = 0
+    total_skipped_missing_fk = 0
 
-
-def load_licitacion(conn):
-    print("Loading LICITACION from", CSV_LICIT)
-    rows = []
-    seen_ids = set()
-    kept = 0
-    skipped_dups = 0
-    skipped_nif = 0
-    with open(CSV_LICIT, "r", encoding="latin1", newline="") as f:
-        reader = csv.DictReader(f)
-        for r in reader:
-            nif = (r.get("nif_oc") or "").strip()
-            if nif != UAM_NIF:
-                skipped_nif += 1
-                continue  # keep only UAM rows
-            ident = r.get("identificador")
-            if ident in seen_ids:
-                skipped_dups += 1
-                continue  # keep first occurrence only to respect ER PK
-            seen_ids.add(ident)
-            rows.append(
-                (
-                    to_int(ident),
-                    (r.get("nif_oc") or "").strip(),
-                    parse_ts(r.get("primera_publicacion")),
-                    to_decimal(
-                        r.get("presupuesto_base_sin_impuestos_licitacion_o_lote")
-                    ),
-                    to_decimal(
-                        r.get("importe_adjudicacion_sin_impuestos_licitacion_o_lote")
-                    ),
-                    (r.get("resultado_licitacion_o_lote") or "").strip(),
+    for csv_path in csv_files:
+        print(f"Loading AYUDA from {csv_path}")
+        rows = []
+        kept = 0
+        skipped_empty = 0
+        skipped_missing_fk = 0
+        with open(csv_path, "r", encoding="latin1", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                cod_univ = (r.get("cod_universidad") or "").strip().strip('"')
+                # Normalize UAM code: "23" -> "023"
+                if cod_univ == "23":
+                    cod_univ = UAM_COD
+                cod_conv = (r.get("cod_convocatoria_ayuda") or "").strip()
+                if not cod_conv:
+                    skipped_empty += 1
+                    continue
+                if cod_conv not in valid_conv:
+                    skipped_missing_fk += 1
+                    continue
+                rows.append(
                     (
-                        r.get("identificador_adjudicatario_de_la_licitacion_o_lote")
-                        or ""
-                    ).strip(),
-                    (r.get("objeto_licitacion_o_lote") or "").strip(),
-                    (r.get("link_licitacion") or "").strip(),
-                    (r.get("descripcion_de_la_financiacion_europea") or "").strip(),
+                        cod_univ,
+                        cod_conv,
+                        to_decimal(r.get("cuantia_total")),
+                        None,  # fecha_concesion not present -> NULL
+                    )
                 )
-            )
-            kept += 1
-    print(
-        f"LICITACION: kept {kept}, skipped non-UAM {skipped_nif}, skipped dups {skipped_dups}"
-    )
-    with conn.cursor() as cur:
-        extras.execute_values(
-            cur,
-            """
-            INSERT INTO LICITACION (
-                identificador, nif_oc, primera_publicacion,
-                presupuesto_base_sin_impuestos_licitacion_o_lote,
-                importe_adjudicacion_sin_impuestos_licitacion_o_lote,
-                resultado_licitacion_o_lote,
-                identificador_adjudicatario_de_la_licitacion_o_lote,
-                objeto_licitacion_o_lote,
-                link_licitacion,
-                descripcion_de_la_financiacion_europea
-            ) VALUES %s
-            """,
-            rows,
+                kept += 1
+        if rows:
+            with conn.cursor() as cur:
+                extras.execute_values(
+                    cur,
+                    """
+                    INSERT INTO AYUDA (
+                        cod_universidad, cod_convocatoria_ayuda, cuantia_total, fecha_concesion
+                    ) VALUES %s
+                    """,
+                    rows,
+                )
+        total_kept += kept
+        total_skipped_empty += skipped_empty
+        total_skipped_missing_fk += skipped_missing_fk
+        print(
+            f"  -> {os.path.basename(csv_path)}: kept {kept}, skipped empty conv {skipped_empty}, skipped missing FK {skipped_missing_fk}"
         )
+    print(
+        f"Total AYUDA: {total_kept} rows, skipped empty {total_skipped_empty}, skipped missing FK {total_skipped_missing_fk}"
+    )
+
+
+def load_licitacion(conn, csv_files):
+    """Load LICITACION from one or more CSV files."""
+    seen_ids = set()
+    total_kept = 0
+    total_skipped_dups = 0
+    total_skipped_nif = 0
+
+    for csv_path in csv_files:
+        print(f"Loading LICITACION from {csv_path}")
+        rows = []
+        kept = 0
+        skipped_dups = 0
+        skipped_nif = 0
+        with open(csv_path, "r", encoding="latin1", newline="") as f:
+            reader = csv.DictReader(f)
+            for r in reader:
+                nif = (r.get("nif_oc") or "").strip()
+                if nif != UAM_NIF:
+                    skipped_nif += 1
+                    continue  # keep only UAM rows
+                ident = r.get("identificador")
+                if ident in seen_ids:
+                    skipped_dups += 1
+                    continue  # keep first occurrence only to respect ER PK
+                seen_ids.add(ident)
+                rows.append(
+                    (
+                        to_int(ident),
+                        (r.get("nif_oc") or "").strip(),
+                        parse_ts(r.get("primera_publicacion")),
+                        to_decimal(
+                            r.get("presupuesto_base_sin_impuestos_licitacion_o_lote")
+                        ),
+                        to_decimal(
+                            r.get(
+                                "importe_adjudicacion_sin_impuestos_licitacion_o_lote"
+                            )
+                        ),
+                        (r.get("resultado_licitacion_o_lote") or "").strip(),
+                        (
+                            r.get("identificador_adjudicatario_de_la_licitacion_o_lote")
+                            or ""
+                        ).strip(),
+                        (r.get("objeto_licitacion_o_lote") or "").strip(),
+                        (r.get("link_licitacion") or "").strip(),
+                        (r.get("descripcion_de_la_financiacion_europea") or "").strip(),
+                    )
+                )
+                kept += 1
+        if rows:
+            with conn.cursor() as cur:
+                extras.execute_values(
+                    cur,
+                    """
+                    INSERT INTO LICITACION (
+                        identificador, nif_oc, primera_publicacion,
+                        presupuesto_base_sin_impuestos_licitacion_o_lote,
+                        importe_adjudicacion_sin_impuestos_licitacion_o_lote,
+                        resultado_licitacion_o_lote,
+                        identificador_adjudicatario_de_la_licitacion_o_lote,
+                        objeto_licitacion_o_lote,
+                        link_licitacion,
+                        descripcion_de_la_financiacion_europea
+                    ) VALUES %s
+                    """,
+                    rows,
+                )
+        total_kept += kept
+        total_skipped_nif += skipped_nif
+        total_skipped_dups += skipped_dups
+        print(
+            f"  -> {os.path.basename(csv_path)}: kept {kept}, skipped non-UAM {skipped_nif}, skipped dups {skipped_dups}"
+        )
+    print(
+        f"Total LICITACION: {total_kept} rows, skipped non-UAM {total_skipped_nif}, skipped dups {total_skipped_dups}"
+    )
 
 
 def main():
@@ -415,25 +517,56 @@ def main():
         "--password", default=os.environ.get("POSTGRES_PASSWORD", "postgres")
     )
     parser.add_argument("--dbname", default=os.environ.get("POSTGRES_DB", "postgres"))
+    parser.add_argument(
+        "--csv-dir",
+        default="data/csv",
+        help="Directory containing CSV files (default: data/csv)",
+    )
     args = parser.parse_args()
 
-    for path in [CSV_GASTOS, CSV_INGRESOS, CSV_CONV, CSV_AYUDA, CSV_LICIT]:
-        if not os.path.exists(path):
-            print(f"ERROR: CSV not found: {path}", file=sys.stderr)
-            sys.exit(1)
+    # Resolve CSV directory path
+    csv_dir = args.csv_dir
+    if not os.path.isabs(csv_dir):
+        csv_dir = os.path.join(ROOT, csv_dir)
+
+    print(f"Discovering CSV files in: {csv_dir}")
+    discovered = discover_csv_files(csv_dir)
+
+    # Print discovered files
+    for category, files in discovered.items():
+        if files:
+            print(f"  {category}: {len(files)} file(s)")
+            for f in files:
+                print(f"    - {os.path.basename(f)}")
+        else:
+            print(f"  {category}: No files found")
+
+    # Validate we have at least some files
+    total_files = sum(len(files) for files in discovered.values())
+    if total_files == 0:
+        print(f"ERROR: No CSV files found in {csv_dir}", file=sys.stderr)
+        sys.exit(1)
 
     conn = connect_db(args)
     try:
         with conn.cursor() as cur:
             create_tables(cur)
             seed_universidad(cur)
-        load_gastos(conn)
-        load_ingresos(conn)
-        load_convocatoria(conn)
-        load_ayuda(conn)
-        load_licitacion(conn)
+
+        # Load data in correct FK order
+        if discovered["gastos"]:
+            load_gastos(conn, discovered["gastos"])
+        if discovered["ingresos"]:
+            load_ingresos(conn, discovered["ingresos"])
+        if discovered["convocatorias"]:
+            load_convocatoria(conn, discovered["convocatorias"])
+        if discovered["ayudas"]:
+            load_ayuda(conn, discovered["ayudas"])
+        if discovered["licitaciones"]:
+            load_licitacion(conn, discovered["licitaciones"])
+
         conn.commit()
-        print("DONE: All data loaded successfully.")
+        print("\n✅ DONE: All data loaded successfully.")
     except Exception as e:
         conn.rollback()
         print("ERROR:", e, file=sys.stderr)

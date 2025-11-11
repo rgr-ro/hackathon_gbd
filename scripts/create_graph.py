@@ -9,11 +9,11 @@ from rdflib.term import BNode
 DCAT = Namespace("http://www.w3.org/ns/dcat#")
 SCHEMA = Namespace("https://schema.org/")
 # Tu prefijo para entidades (Universidades, Empresas)
-MIDS_UNI = Namespace("https://www.mi-master.es/proyecto/entidad/")
+G2_UNI = Namespace("https://www.mi-master.es/proyecto/entidad/")
 # Tu prefijo para datos (Licitaciones, Ayudas)
-MIDS_DATA = Namespace("https://www.mi-master.es/proyecto/datos/")
+G2_DATA = Namespace("https://www.mi-master.es/proyecto/datos/")
 # Tu prefijo para tu ontología/extensión
-MIDS_ONT = Namespace("https://www.mi-master.es/proyecto/ontologia#")
+G2_ONT = Namespace("https://www.mi-master.es/proyecto/ontologia#")
 # Namespaces para enlaces externos
 DBR = Namespace("http://dbpedia.org/resource/")
 WD = Namespace("http://www.wikidata.org/entity/")
@@ -46,7 +46,7 @@ def slugify(text):
 UAM_CODIGO = "23"
 UAM_NIFOC = "Q2818013A"
 # La URI única para la UAM en nuestro grafo
-UAM_URI = MIDS_UNI["UAM-Q2818013A"]
+UAM_URI = G2_UNI["UAM-Q2818013A"]
 
 # Configuración de todos los CSVs a procesar
 CATALOGO_CONFIG = [
@@ -116,11 +116,11 @@ def procesar_licitacion(g, config, dist_uri):
                 id_safe = slugify(row["identificador"])
                 lote_safe = slugify(row["lote"])
                 lic_id = f"licitacion-{id_safe}-{lote_safe}"
-                lic_uri = MIDS_DATA[lic_id]
+                lic_uri = G2_DATA[lic_id]
 
                 # === MODIFICACIÓN ===
                 # Usamos nuestra ontología local
-                g.add((lic_uri, RDF.type, MIDS_ONT.Licitacion))
+                g.add((lic_uri, RDF.type, G2_ONT.Licitacion))
 
                 # Campos de texto (Datos No Estructurados)
                 # Usamos propiedades estándar (schema, dcterms)
@@ -136,7 +136,7 @@ def procesar_licitacion(g, config, dist_uri):
                 g.add(
                     (
                         lic_uri,
-                        MIDS_ONT.financiacionEuropea,
+                        G2_ONT.financiacionEuropea,
                         Literal(row["descripcion_de_la_financiacion_europea"]),
                     )
                 )
@@ -185,11 +185,11 @@ def procesar_licitacion(g, config, dist_uri):
                 adj_id_safe = slugify(
                     row["identificador_adjudicatario_de_la_licitacion_o_lote"]
                 )
-                adj_uri = MIDS_UNI[f"empresa-{adj_id_safe}"]
+                adj_uri = G2_UNI[f"empresa-{adj_id_safe}"]
 
                 # === MODIFICACIÓN ===
                 # Usamos nuestra ontología local
-                g.add((adj_uri, RDF.type, MIDS_ONT.Organizacion))
+                g.add((adj_uri, RDF.type, G2_ONT.Organizacion))
                 g.add(
                     (
                         adj_uri,
@@ -219,14 +219,14 @@ def procesar_presupuesto_gastos(g, config, dist_uri):
                 # Limpiamos el cod_partida
                 cod_partida_safe = slugify(row["cod_partida"])
                 gasto_id = f"gasto-{row['anio']}-{cod_partida_safe}-{i}"
-                gasto_uri = MIDS_DATA[gasto_id]
+                gasto_uri = G2_DATA[gasto_id]
 
                 # === MODIFICACIÓN ===
-                g.add((gasto_uri, RDF.type, MIDS_ONT.PartidaGasto))
+                g.add((gasto_uri, RDF.type, G2_ONT.PartidaGasto))
 
                 # Usamos nuestra ontología para campos que no existen
-                g.add((gasto_uri, MIDS_ONT.capitulo, Literal(row["des_capitulo"])))
-                g.add((gasto_uri, MIDS_ONT.articulo, Literal(row["des_articulo"])))
+                g.add((gasto_uri, G2_ONT.capitulo, Literal(row["des_capitulo"])))
+                g.add((gasto_uri, G2_ONT.articulo, Literal(row["des_articulo"])))
                 g.add((gasto_uri, DCTERMS.description, Literal(row["des_concepto"])))
 
                 # Importes
@@ -241,7 +241,7 @@ def procesar_presupuesto_gastos(g, config, dist_uri):
                             Literal(inicial_val, datatype=XSD.decimal),
                         )
                     )
-                    g.add((gasto_uri, MIDS_ONT.creditoInicial, inicial_node))
+                    g.add((gasto_uri, G2_ONT.creditoInicial, inicial_node))
 
                     total_val = float(row["credito_total"])
                     total_node = BNode()
@@ -282,14 +282,14 @@ def procesar_presupuesto_ingresos(g, config, dist_uri):
                 # Limpiamos el cod_partida (proactivamente)
                 cod_partida_safe = slugify(row["cod_partida"])
                 ingreso_id = f"ingreso-{row['anio']}-{cod_partida_safe}-{i}"
-                ingreso_uri = MIDS_DATA[ingreso_id]
+                ingreso_uri = G2_DATA[ingreso_id]
 
                 # === MODIFICACIÓN ===
-                g.add((ingreso_uri, RDF.type, MIDS_ONT.PartidaIngreso))
+                g.add((ingreso_uri, RDF.type, G2_ONT.PartidaIngreso))
 
                 # Usamos nuestra ontología para campos que no existen
-                g.add((ingreso_uri, MIDS_ONT.capitulo, Literal(row["des_capitulo"])))
-                g.add((ingreso_uri, MIDS_ONT.articulo, Literal(row["des_articulo"])))
+                g.add((ingreso_uri, G2_ONT.capitulo, Literal(row["des_capitulo"])))
+                g.add((ingreso_uri, G2_ONT.articulo, Literal(row["des_articulo"])))
                 g.add((ingreso_uri, DCTERMS.description, Literal(row["des_concepto"])))
 
                 # Importes
@@ -330,10 +330,10 @@ def procesar_convocatoria_ayuda(g, config, dist_uri):
             for row in reader:
                 # Limpiamos el cod_convocatoria
                 cod_safe = slugify(row["cod_convocatoria"])
-                conv_uri = MIDS_DATA[f"convocatoria-{cod_safe}"]
+                conv_uri = G2_DATA[f"convocatoria-{cod_safe}"]
 
                 # === MODIFICACIÓN ===
-                g.add((conv_uri, RDF.type, MIDS_ONT.ConvocatoriaAyuda))
+                g.add((conv_uri, RDF.type, G2_ONT.ConvocatoriaAyuda))
 
                 g.add((conv_uri, SCHEMA.name, Literal(row["nombre_convocatoria"])))
                 g.add((conv_uri, DCTERMS.description, Literal(row["des_categoria"])))
@@ -389,10 +389,10 @@ def procesar_ayuda(g, config, dist_uri):
             for i, row in enumerate(reader):
                 # ID es el año + contador (no hay PK)
                 ayuda_id = f"ayuda-{row['anio']}-{i}"
-                ayuda_uri = MIDS_DATA[ayuda_id]
+                ayuda_uri = G2_DATA[ayuda_id]
 
                 # === MODIFICACIÓN ===
-                g.add((ayuda_uri, RDF.type, MIDS_ONT.AyudaConcedida))
+                g.add((ayuda_uri, RDF.type, G2_ONT.AyudaConcedida))
 
                 try:
                     cuantia_val = float(row["cuantia_total"])
@@ -415,11 +415,11 @@ def procesar_ayuda(g, config, dist_uri):
 
                 # Limpiamos el cod_convocatoria
                 cod_conv_safe = slugify(row["cod_convocatoria_ayuda"])
-                conv_uri = MIDS_DATA[f"convocatoria-{cod_conv_safe}"]
+                conv_uri = G2_DATA[f"convocatoria-{cod_conv_safe}"]
 
                 # === MODIFICACIÓN ===
                 # Usamos nuestra propiedad de ontología
-                g.add((ayuda_uri, MIDS_ONT.convocatoriaAsociada, conv_uri))
+                g.add((ayuda_uri, G2_ONT.convocatoriaAsociada, conv_uri))
 
                 g.add((ayuda_uri, DCTERMS.provenance, dist_uri))
 
@@ -445,9 +445,9 @@ def main():
     g.bind("dcat", DCAT)
     g.bind("dcterms", DCTERMS)
     g.bind("schema", SCHEMA)
-    g.bind("mids_uni", MIDS_UNI)
-    g.bind("mids_data", MIDS_DATA)
-    g.bind("mids_ont", MIDS_ONT)
+    g.bind("g2_uni", G2_UNI)
+    g.bind("g2_data", G2_DATA)
+    g.bind("g2_ont", G2_ONT)
     g.bind("xsd", XSD)
     g.bind("owl", OWL)
     g.bind("dbr", DBR)
@@ -457,7 +457,7 @@ def main():
     print("--- Iniciando Tarea 0: Generar meta-esquema de Dominio (Ontología) ---")
 
     # Definir la ontología en sí
-    ont_uri = MIDS_ONT[""]  # La URI de la ontología es el namespace base
+    ont_uri = G2_ONT[""]  # La URI de la ontología es el namespace base
     g.add((ont_uri, RDF.type, OWL.Ontology))
     g.add(
         (
@@ -468,46 +468,46 @@ def main():
     )
 
     # --- Clases (Classes) ---
-    g.add((MIDS_ONT.Universidad, RDF.type, OWL.Class))
-    g.add((MIDS_ONT.Universidad, OWL.equivalentClass, SCHEMA.University))
+    g.add((G2_ONT.Universidad, RDF.type, OWL.Class))
+    g.add((G2_ONT.Universidad, OWL.equivalentClass, SCHEMA.University))
 
-    g.add((MIDS_ONT.Organizacion, RDF.type, OWL.Class))
-    g.add((MIDS_ONT.Organizacion, OWL.equivalentClass, SCHEMA.Organization))
+    g.add((G2_ONT.Organizacion, RDF.type, OWL.Class))
+    g.add((G2_ONT.Organizacion, OWL.equivalentClass, SCHEMA.Organization))
 
-    g.add((MIDS_ONT.Licitacion, RDF.type, OWL.Class))
-    g.add((MIDS_ONT.Licitacion, OWL.equivalentClass, SCHEMA.Tender))
+    g.add((G2_ONT.Licitacion, RDF.type, OWL.Class))
+    g.add((G2_ONT.Licitacion, OWL.equivalentClass, SCHEMA.Tender))
 
-    g.add((MIDS_ONT.ConvocatoriaAyuda, RDF.type, OWL.Class))
-    g.add((MIDS_ONT.ConvocatoriaAyuda, OWL.equivalentClass, SCHEMA.Grant))
+    g.add((G2_ONT.ConvocatoriaAyuda, RDF.type, OWL.Class))
+    g.add((G2_ONT.ConvocatoriaAyuda, OWL.equivalentClass, SCHEMA.Grant))
 
-    g.add((MIDS_ONT.AyudaConcedida, RDF.type, OWL.Class))
+    g.add((G2_ONT.AyudaConcedida, RDF.type, OWL.Class))
     g.add(
-        (MIDS_ONT.AyudaConcedida, RDFS.subClassOf, SCHEMA.MonetaryGrant)
+        (G2_ONT.AyudaConcedida, RDFS.subClassOf, SCHEMA.MonetaryGrant)
     )  # Una subclase
 
-    g.add((MIDS_ONT.PartidaGasto, RDF.type, OWL.Class))
-    g.add((MIDS_ONT.PartidaIngreso, RDF.type, OWL.Class))
+    g.add((G2_ONT.PartidaGasto, RDF.type, OWL.Class))
+    g.add((G2_ONT.PartidaIngreso, RDF.type, OWL.Class))
 
     # --- Propiedades de Datos (Datatype Properties) ---
-    g.add((MIDS_ONT.financiacionEuropea, RDF.type, OWL.DatatypeProperty))
-    g.add((MIDS_ONT.financiacionEuropea, RDFS.domain, MIDS_ONT.Licitacion))
-    g.add((MIDS_ONT.financiacionEuropea, RDFS.range, XSD.string))
+    g.add((G2_ONT.financiacionEuropea, RDF.type, OWL.DatatypeProperty))
+    g.add((G2_ONT.financiacionEuropea, RDFS.domain, G2_ONT.Licitacion))
+    g.add((G2_ONT.financiacionEuropea, RDFS.range, XSD.string))
 
-    g.add((MIDS_ONT.añoFiscal, RDF.type, OWL.DatatypeProperty))
-    g.add((MIDS_ONT.añoFiscal, RDFS.domain, DCAT.Distribution))
-    g.add((MIDS_ONT.añoFiscal, RDFS.range, XSD.gYear))
+    g.add((G2_ONT.añoFiscal, RDF.type, OWL.DatatypeProperty))
+    g.add((G2_ONT.añoFiscal, RDFS.domain, DCAT.Distribution))
+    g.add((G2_ONT.añoFiscal, RDFS.range, XSD.gYear))
 
-    g.add((MIDS_ONT.capitulo, RDF.type, OWL.DatatypeProperty))
-    g.add((MIDS_ONT.articulo, RDF.type, OWL.DatatypeProperty))
+    g.add((G2_ONT.capitulo, RDF.type, OWL.DatatypeProperty))
+    g.add((G2_ONT.articulo, RDF.type, OWL.DatatypeProperty))
 
-    g.add((MIDS_ONT.creditoInicial, RDF.type, OWL.DatatypeProperty))
-    g.add((MIDS_ONT.creditoInicial, RDFS.domain, MIDS_ONT.PartidaGasto))
-    g.add((MIDS_ONT.creditoInicial, RDFS.range, SCHEMA.MonetaryAmount))
+    g.add((G2_ONT.creditoInicial, RDF.type, OWL.DatatypeProperty))
+    g.add((G2_ONT.creditoInicial, RDFS.domain, G2_ONT.PartidaGasto))
+    g.add((G2_ONT.creditoInicial, RDFS.range, SCHEMA.MonetaryAmount))
 
     # --- Propiedades de Objeto (Object Properties) ---
-    g.add((MIDS_ONT.convocatoriaAsociada, RDF.type, OWL.ObjectProperty))
-    g.add((MIDS_ONT.convocatoriaAsociada, RDFS.domain, MIDS_ONT.AyudaConcedida))
-    g.add((MIDS_ONT.convocatoriaAsociada, RDFS.range, MIDS_ONT.ConvocatoriaAyuda))
+    g.add((G2_ONT.convocatoriaAsociada, RDF.type, OWL.ObjectProperty))
+    g.add((G2_ONT.convocatoriaAsociada, RDFS.domain, G2_ONT.AyudaConcedida))
+    g.add((G2_ONT.convocatoriaAsociada, RDFS.range, G2_ONT.ConvocatoriaAyuda))
 
     print("--- Tarea 0 Completada ---")
 
@@ -516,7 +516,7 @@ def main():
 
     # Creamos el nodo de la Universidad (Publisher) y añadimos sus IDs
     # === MODIFICACIÓN ===
-    g.add((UAM_URI, RDF.type, MIDS_ONT.Universidad))  # Usamos nuestra clase
+    g.add((UAM_URI, RDF.type, G2_ONT.Universidad))  # Usamos nuestra clase
     g.add((UAM_URI, SCHEMA.name, Literal("Universidad Autónoma de Madrid")))
     g.add(
         (UAM_URI, DCTERMS.identifier, Literal(UAM_CODIGO))
@@ -536,7 +536,7 @@ def main():
         print(f"Generando metadatos DCAT para: {config['entidad']}")
 
         # 1. Crear el dcat:Dataset
-        dataset_uri = MIDS_DATA[config["dataset_id"]]
+        dataset_uri = G2_DATA[config["dataset_id"]]
         g.add((dataset_uri, RDF.type, DCAT.Dataset))
         g.add((dataset_uri, DCTERMS.title, Literal(config["titulo_dataset"])))
         g.add((dataset_uri, DCTERMS.description, Literal(config["desc_dataset"])))
@@ -546,7 +546,7 @@ def main():
 
         # 2. Crear la dcat:Distribution (el CSV)
         dist_id = f"distribucion-{config['entidad'].lower()}"
-        dist_uri = MIDS_DATA[dist_id]
+        dist_uri = G2_DATA[dist_id]
         distribuciones_uris[config["entidad"]] = dist_uri  # Guardamos la URI
 
         g.add((dataset_uri, DCAT.distribution, dist_uri))
@@ -560,7 +560,7 @@ def main():
         g.add(
             (
                 dist_uri,
-                MIDS_ONT.añoFiscal,
+                G2_ONT.añoFiscal,
                 Literal(config["año_fiscal"], datatype=XSD.gYear),
             )
         )
