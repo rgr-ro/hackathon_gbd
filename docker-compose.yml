@@ -57,7 +57,7 @@ services:
       dockerfile: Dockerfile
     image: descarga_datos:latest
     container_name: descarga_datos
-    restart: unless-stopped
+    restart: "no"
     env_file:
       - .env
     volumes:
