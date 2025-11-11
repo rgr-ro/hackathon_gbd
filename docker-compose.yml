@@ -61,9 +61,9 @@ services:
     env_file:
       - .env
     volumes:
-      # Mount host ./data/csv/all_csv to the container's expected /app/csv/all_csv output dir
-      # This ensures files the downloader writes to /app/csv/all_csv are visible on the host
-      - ./data/csv/all_csv:/app/csv/all_csv:rw
+      # Mount host ./data/csv/all_csv to the container's expected /app/data/csv/all_csv output dir
+      # This ensures files the downloader writes to /app/data/csv/all_csv are visible on the host
+      - ./data/csv/all_csv:/app/data/csv/all_csv:rw
       # Note: do not mount the parent ./data/csv here — mounting the parent can hide
       # files created during the image build. Mount the exact folder the app writes to.
       # Mount the downloader scripts into /app/scripts (read-only)

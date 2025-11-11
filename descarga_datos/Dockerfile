@@ -27,7 +27,7 @@ COPY ./scripts/descarga_datos.py .
 # `/app/data/csv` para los CSV directos de 2023
 # `/app/data/all_csv` para los CSV extraídos de los ZIPs
 # `/app/scripts` para montar scripts desde el host
-RUN mkdir -p /app/data/csv /app/data/all_csv /app/scripts \
+RUN mkdir -p /app/data/csv /app/data/csv/all_csv /app/scripts \
 	&& chown -R root:root /app/scripts /app/data
 
 # Exponer variables de entorno útiles dentro de la imagen
