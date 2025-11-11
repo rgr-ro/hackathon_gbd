@@ -27,24 +27,6 @@ import os
 import sys
 from typing import List, Optional, Tuple
 
-# Ensure stdout/stderr use UTF-8 encoding in environments (containers/terminals)
-# that default to a non-UTF-8 locale. This prevents garbling like
-# 'impresión' -> 'impresiÃ³n' when UTF-8 bytes are displayed as Latin-1.
-try:
-    # Python 3.7+: recommended reconfigure API
-    if hasattr(sys.stdout, "reconfigure"):
-        sys.stdout.reconfigure(encoding="utf-8")
-        sys.stderr.reconfigure(encoding="utf-8")
-    else:
-        # Fallback: wrap the binary buffer with a UTF-8 text wrapper
-        import io
-
-        sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
-        sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
-except Exception:
-    # Best-effort; if this fails we'll still proceed with defaults.
-    pass
-
 try:
     import psycopg2
     from psycopg2.extras import execute_values
