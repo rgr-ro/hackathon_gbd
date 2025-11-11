@@ -7,10 +7,10 @@ Two primary modes:
 Usage (PowerShell):
   # Ingest:
   $env:PGHOST='localhost'; $env:PGPORT='5432'; $env:PGUSER='myuser'; $env:PGPASSWORD='mypassword'; $env:PGDATABASE='mydb'
-  python .\scripts\pgvector_ingest_and_query.py ingest --csv data.csv --text-col content --id-col id --mode dummy --dim 128
+    python ./scripts/pgvector_ingest_and_query.py ingest --csv data.csv --text-col content --id-col id --mode dummy --dim 128
 
   # Query:
-  python .\scripts\pgvector_ingest_and_query.py query --q "What is the summary of X?" --k 5 --mode dummy --dim 128
+    python ./scripts/pgvector_ingest_and_query.py query --q "What is the summary of X?" --k 5 --mode dummy --dim 128
 
 Notes:
  - The script supports a lightweight deterministic `dummy` embedding (fast) or
@@ -67,18 +67,38 @@ def to_pgvector_literal(vec: List[float]) -> str:
 
 
 def connect_db():
-    # When running inside the `load_data` container the compose file sets
-    # POSTGRES_HOST/POSTGRES_PORT/POSTGRES_USER/POSTGRES_PASSWORD/POSTGRES_DB.
-    # Prefer those, but fall back to the more generic PG* env vars used for
-    # local runs and then to reasonable defaults.
+    # Resolve connection parameters with the following precedence:
+    # 1) Docker-compose POSTGRES_* (used when running inside containers)
+    # 2) PG* environment vars (common on developer machines)
+    # 3) DB_HOST_PORT (compose mapping for host port) and defaults for host use
+    # This allows the same code to run inside the `load_data` container (host=db)
+    # and from the host machine (connect to localhost:DB_HOST_PORT).
+    host = os.getenv("POSTGRES_HOST") or os.getenv("PGHOST") or os.getenv("DB_HOST") or "localhost"
+    port = int(
+        os.getenv("POSTGRES_PORT")
+        or os.getenv("PGPORT")
+        or os.getenv("DB_HOST_PORT")
+        or os.getenv("DB_PORT")
+        or "5432"
+    )
+    user = os.getenv("POSTGRES_USER") or os.getenv("PGUSER") or "myuser"
+    password = os.getenv("POSTGRES_PASSWORD") or os.getenv("PGPASSWORD") or "mypassword"
+    dbname = os.getenv("POSTGRES_DB") or os.getenv("PGDATABASE") or "mydb"
+
     params = {
-        "host": os.getenv("POSTGRES_HOST", os.getenv("PGHOST", "localhost")),
-        "port": int(os.getenv("POSTGRES_PORT", os.getenv("PGPORT", "5432"))),
-        "user": os.getenv("POSTGRES_USER", os.getenv("PGUSER", "myuser")),
-        "password": os.getenv("POSTGRES_PASSWORD", os.getenv("PGPASSWORD", "mypassword")),
-        "dbname": os.getenv("POSTGRES_DB", os.getenv("PGDATABASE", "mydb")),
+        "host": host,
+        "port": port,
+        "user": user,
+        "password": password,
+        "dbname": dbname,
     }
-    return psycopg2.connect(**params)
+    conn = psycopg2.connect(**params)
+    # Ensure DB client encoding is UTF8 for proper text round-trip
+    try:
+        conn.set_client_encoding("UTF8")
+    except Exception:
+        pass
+    return conn
 
 
 def ensure_table(cur, dim: int):

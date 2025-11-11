@@ -72,7 +72,12 @@ services:
     # Keep the container running after the script finishes so you can
     # enter it with `docker exec -it descarga_datos bash`.
     # The command runs the downloader in background and then tails /dev/null.
-    command: /bin/bash -c "python /app/descarga_datos.py & exec tail -f /dev/null"
+    command:
+      - /bin/bash
+      - -c
+      - |
+        python /app/descarga_datos.py &
+#          exec tail -f /dev/null
     stdin_open: true
     tty: true
     networks:
@@ -117,7 +122,7 @@ services:
           --user $${POSTGRES_USER} \
           --password $${POSTGRES_PASSWORD} \
           --dbname $${POSTGRES_DB}
-        exec tail -f /dev/null
+#        exec tail -f /dev/null
     depends_on:
       - db
       - descarga_datos
