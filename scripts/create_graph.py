@@ -524,6 +524,19 @@ def main():
         default="grafo_completo.ttl",
         help="Nombre del archivo de salida (default: grafo_completo.ttl)",
     )
+    # Permitir configurar los enlaces externos (evita hardcodear QIDs)
+    parser.add_argument(
+        "--uam-wikidata-qid",
+        type=str,
+        default="Q233939",
+        help="QID de Wikidata para la UAM (default: Q233939)",
+    )
+    parser.add_argument(
+        "--uam-dbpedia-resource",
+        type=str,
+        default="Autonomous_University_of_Madrid",
+        help="Recurso de DBpedia para la UAM (default: Autonomous_University_of_Madrid)",
+    )
     args = parser.parse_args()
 
     # Generar catálogo automáticamente desde la carpeta
@@ -616,11 +629,23 @@ def main():
     )  # ID de los CSVs de Ayudas/Presupuestos
     g.add((UAM_URI, SCHEMA.vatID, Literal(UAM_NIFOC)))  # ID del CSV de Licitaciones
 
-    # === MODIFICACIÓN: El "Vínculo de Oro" ===
-    g.add((UAM_URI, OWL.sameAs, WD.Q233939))  # Enlace a Wikidata
-    g.add(
-        (UAM_URI, OWL.sameAs, DBR.Autonomous_University_of_Madrid)
-    )  # Enlace a DBpedia
+    # === MODIFICACIÓN: El "Vínculo de Oro" (configurable por CLI) ===
+    # Wikidata
+    qid = (args.uam_wikidata_qid or "Q233939").strip()
+    # Permite tanto "Q233939" como "wd:Q233939" o URL completa; normalizamos a QID
+    import re as _re
+    m = _re.search(r"(Q\\d+)", qid)
+    qid_norm = m.group(1) if m else "Q233939"
+    g.add((UAM_URI, OWL.sameAs, WD[qid_norm]))
+
+    # DBpedia
+    dbres = (args.uam_dbpedia_resource or "Autonomous_University_of_Madrid").strip()
+    # Permite tanto nombre corto como URI completa
+    if dbres.startswith("http://dbpedia.org/resource/"):
+        db_uri = URIRef(dbres)
+    else:
+        db_uri = DBR[dbres]
+    g.add((UAM_URI, OWL.sameAs, db_uri))
 
     # Mapa para guardar las URIs de las distribuciones
     distribuciones_uris = {}
