@@ -116,7 +116,7 @@ services:
         sleep 10
         echo 'Starting data load...'
         python scripts/load_filtered_csvs.py \
-          --csv-dir /app/data/all_csv \
+          --csv-dir /app/data/csv/all_csv \
           --host db \
           --port 5432 \
           --user $${POSTGRES_USER} \
