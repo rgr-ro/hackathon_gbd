@@ -2,19 +2,21 @@
 
 Proyecto de hackathon para gestión de datos de la Universidad Autónoma de Madrid utilizando PostgreSQL, pgVector y GraphDB.
 
-📘 **Documentación**:
+**Documentación**:
 
-- [Guía Rápida (QUICKSTART)](QUICKSTART.md) - Inicio rápido paso a paso
 - [Arquitectura del Sistema (ARCHITECTURE)](ARCHITECTURE.md) - Diagramas y flujo de datos
 
-## 🚀 Inicio Rápido
+## Inicio Rápido
 
-**Ver la guía completa**: [QUICKSTART.md](QUICKSTART.md) 📘
+Para iniciar el pipeline completo, simplemente ejecutar:
 
-### Prerequisitos
+```
+docker compose up -d
+```
 
-- Docker y Docker Compose
-- Al menos 4GB de RAM disponible
+### Diagrama del pipeline
+
+<img src="demo/Flujo.png" width="800" alt="Esquema">
 
 ### Configuración Inicial
 
@@ -40,7 +42,7 @@ nano .env
 docker network create gestbd_net
 
 # Iniciar servicios
-docker-compose up -d
+docker compose up -d
 ```
 
 ### Orden de Ejecución de Servicios
@@ -49,9 +51,9 @@ Los servicios se ejecutan en el siguiente orden automáticamente:
 
 1. **db** (PostgreSQL) - Base de datos principal
 2. **descarga_datos** - Descarga archivos CSV de datos abiertos UAM
-3. **load_data** - Carga los CSV en PostgreSQL ✨
-4. **create_graph** - Genera grafo RDF/TTL desde los CSVs ✨
-5. **upload_to_graphdb** - Sube el grafo TTL a GraphDB automáticamente ✨ NUEVO
+3. **load_data** - Carga los CSV en PostgreSQL
+4. **create_graph** - Genera grafo RDF/TTL desde los CSVs
+5. **upload_to_graphdb** - Sube el grafo TTL a GraphDB automáticamente
 6. **pgadmin** - Interfaz web para PostgreSQL
 7. **graphdb** - Base de datos de grafos
 
@@ -59,16 +61,16 @@ Los servicios se ejecutan en el siguiente orden automáticamente:
 
 ```bash
 # Ver estado de todos los servicios
-docker-compose ps
+docker compose ps
 
 # Ver logs del servicio de carga de datos
-docker-compose logs -f load_data
+docker compose logs -f load_data
 
 # Ver logs de todos los servicios
-docker-compose logs -f
+docker compose logs -f
 ```
 
-## 📦 Servicios
+## Servicios
 
 ### PostgreSQL (db)
 
@@ -91,7 +93,7 @@ docker-compose logs -f
 
 Descarga automáticamente todos los CSV de datos abiertos de la UAM desde 2017 hasta 2025.
 
-### Carga de Datos (load_data) ✨ NUEVO
+### Carga de Datos (load_data)
 
 **Carga automática de datos a PostgreSQL con:**
 
@@ -101,21 +103,9 @@ Descarga automáticamente todos los CSV de datos abiertos de la UAM desde 2017 h
 - Deduplicación de licitaciones
 - Estadísticas detalladas por archivo
 
-**Gestión del servicio:**
-
-```bash
-# Desde el directorio load_data/
-./manage.sh build      # Construir imagen
-./manage.sh run        # Ejecutar carga
-./manage.sh logs       # Ver logs
-./manage.sh status     # Ver estado
-./manage.sh restart    # Reiniciar servicio
-./manage.sh clean      # Limpiar y recargar desde cero
-```
-
 Ver documentación completa en [load_data/README.md](load_data/README.md)
 
-### Generación de Grafo RDF (create_graph) ✨ NUEVO
+### Generación de Grafo RDF (create_graph)
 
 **Genera grafo RDF/TTL desde los CSVs con:**
 
@@ -125,25 +115,13 @@ Ver documentación completa en [load_data/README.md](load_data/README.md)
 - Relaciones entre entidades (universidades, licitaciones, ayudas, presupuestos)
 - Auto-descubrimiento de todos los CSVs
 
-**Gestión del servicio:**
-
-```bash
-# Desde el directorio create_graph/
-./manage.sh build      # Construir imagen
-./manage.sh run        # Generar grafo
-./manage.sh logs       # Ver logs
-./manage.sh status     # Ver estado y archivo generado
-./manage.sh validate   # Validar grafo TTL
-./manage.sh clean      # Limpiar
-```
-
 **Archivo generado:**
 
 - `data/ttl/grafo_completo.ttl` - Grafo RDF completo listo para GraphDB
 
 Ver documentación completa en [create_graph/README.md](create_graph/README.md)
 
-### Upload a GraphDB (upload_to_graphdb) ✨ NUEVO
+### Upload a GraphDB (upload_to_graphdb)
 
 **Sube automáticamente el grafo TTL a GraphDB:**
 
@@ -153,25 +131,9 @@ Ver documentación completa en [create_graph/README.md](create_graph/README.md)
 - Muestra estadísticas (número de triples)
 - Proceso completamente automatizado
 
-**Uso:**
-
-```bash
-# Con docker-compose (automático)
-docker compose up upload_to_graphdb
-
-# Ver logs
-docker compose logs upload_to_graphdb
-```
-
-**Verificación:**
-
-1. Accede a GraphDB: http://localhost:8000
-2. Selecciona repositorio: `uam_data`
-3. Ejecuta consulta: `SELECT (COUNT(*) as ?total) WHERE { ?s ?p ?o }`
-
 Ver documentación completa en [upload_to_graphdb/README.md](upload_to_graphdb/README.md)
 
-## 📊 Estructura de Datos
+## Estructura de Datos
 
 ### Tablas en PostgreSQL
 
@@ -192,68 +154,6 @@ Ver documentación completa en [upload_to_graphdb/README.md](upload_to_graphdb/R
 
 ---
 
-## CONSULTAS DE TEST DE DATOS
+## VISUALIZACION DE RESULTADOS
 
-```
-SELECT * FROM UNIVERSIDAD;
-```
-
-```
-SELECT COUNT(*) AS total_licitaciones
-FROM LICITACION;
-```
-
-```
-SELECT
-    a.cuantia_total,
-    c.nombre_convocatoria,
-    c.des_categoria
-FROM
-    AYUDA a
-JOIN
-    CONVOCATORIA_AYUDA c ON a.cod_convocatoria_ayuda = c.cod_convocatoria
-WHERE
-    a.cuantia_total > 3000  -- Filtramos para ver solo ayudas significativas
-ORDER BY
-    a.cuantia_total DESC
-LIMIT 10;
-```
-
-```
-SELECT
-    l.objeto_licitacion_o_lote,
-    l.importe_adjudicacion_sin_impuestos_licitacion_o_lote,
-    l.adjudicatario_licitacion_o_lote,
-    u.nombre_corto
-FROM
-    LICITACION l
-JOIN
-    UNIVERSIDAD u ON l.nif_oc = u.nifoc
-WHERE
-    u.nombre_corto = 'UAM'
-ORDER BY
-    l.importe_adjudicacion_sin_impuestos_licitacion_o_lote DESC NULLS LAST
-LIMIT 5;
-```
-
-```
-SELECT
-    des_capitulo,
-    SUM(credito_total) AS total_gastado
-FROM
-    PRESUPUESTO_GASTOS
-WHERE
-    cod_universidad = '23' -- Filtramos por la UAM
-GROUP BY
-    des_capitulo
-ORDER BY
-    total_gastado DESC;
-```
-
-```
-SELECT COUNT(*) FROM presupuesto_gastos;
-SELECT COUNT(*) FROM presupuesto_ingresos;
-SELECT COUNT(*) FROM convocatoria_ayuda;
-SELECT COUNT(*) FROM ayuda;
-SELECT COUNT(*) FROM licitacion;
-```
+Ejecutar jupyter notebook [demo/presentacion.ipynb](demo/presentacion.ipynb)
