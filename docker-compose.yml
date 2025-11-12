@@ -163,6 +163,7 @@ services:
       GRAPHDB_URL: "http://graphdb:7200"
       REPOSITORY_ID: "uam_data"
       TTL_FILE: "/data/ttl/grafo_completo.ttl"
+      BASE_URI: "https://www.mi-master.es/proyecto/datos/"
     volumes:
       - ./data/ttl:/data/ttl:ro
     working_dir: /app

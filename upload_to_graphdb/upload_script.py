@@ -15,6 +15,9 @@ import requests
 GRAPHDB_URL = os.getenv("GRAPHDB_URL", "http://graphdb:7200")
 REPOSITORY_ID = os.getenv("REPOSITORY_ID", "uam_data")
 TTL_FILE = os.getenv("TTL_FILE", "/app/data/ttl/grafo_completo.ttl")
+# Base URI para resolver IRIs relativas en el archivo Turtle
+# Se puede sobreescribir con la variable de entorno BASE_URI
+BASE_URI = os.getenv("BASE_URI", "https://www.mi-master.es/proyecto/datos/")
 MAX_RETRIES = 30
 RETRY_DELAY = 2
 
@@ -107,7 +110,10 @@ def create_repository():
 
 
 def upload_ttl_file():
-    """Sube el archivo TTL al repositorio."""
+    """Sube el archivo TTL al repositorio.
+    Si el archivo no define @base, se inyecta una directiva @base al inicio
+    usando BASE_URI para que GraphDB pueda resolver IRIs relativas.
+    """
     ttl_path = Path(TTL_FILE)
 
     if not ttl_path.exists():
@@ -115,23 +121,42 @@ def upload_ttl_file():
         return False
 
     file_size = ttl_path.stat().st_size / 1024 / 1024  # MB
-    print(f"\nSubiendo archivo TTL al repositorio...")
+    print("\nSubiendo archivo TTL al repositorio...")
     print(f"  Archivo: {ttl_path.name}")
     print(f"  Tamaño: {file_size:.2f} MB")
 
-    headers = {"Content-Type": "application/x-turtle"}
+    headers = {"Content-Type": "text/turtle"}
 
+    # Leer el contenido y añadir @base si no existe
     try:
         with open(ttl_path, "rb") as f:
-            response = requests.post(
-                f"{GRAPHDB_URL}/repositories/{REPOSITORY_ID}/statements",
-                data=f,
-                headers=headers,
-                timeout=300,  # 5 minutos para archivos grandes
-            )
+            content = f.read()
+
+        # Revisar las primeras líneas para detectar @base/BASE
+        head = content[:4096].lower()
+        needs_base = (b"@base" not in head) and (b"\nbase " not in head)
+
+        # Asegurar terminador apropiado de la BASE_URI
+        base = BASE_URI
+        if not base.endswith(("/", "#")):
+            base = base + "/"
+
+        if needs_base:
+            prefix = f"@base <{base}> .\n".encode("utf-8")
+            payload = prefix + content
+            print(f"  Nota: No se encontró @base en TTL, inyectando @base <{base}>")
+        else:
+            payload = content
+
+        response = requests.post(
+            f"{GRAPHDB_URL}/repositories/{REPOSITORY_ID}/statements",
+            data=payload,
+            headers=headers,
+            timeout=300,  # 5 minutos para archivos grandes
+        )
 
         if response.status_code in [200, 204]:
-            print(f"✓ Archivo TTL subido exitosamente")
+            print("✓ Archivo TTL subido exitosamente")
             return True
         else:
             print(f"✗ Error subiendo archivo: {response.status_code}")
@@ -152,7 +177,7 @@ def get_repository_stats():
 
         if response.status_code == 200:
             num_statements = response.text.strip()
-            print(f"\n📊 Estadísticas del repositorio:")
+            print("\n📊 Estadísticas del repositorio:")
             print(f"  Total de triples: {num_statements}")
             return True
         else:
