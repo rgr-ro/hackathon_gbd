@@ -20,6 +20,11 @@ TTL_FILE = os.getenv("TTL_FILE", "/app/data/ttl/grafo_completo.ttl")
 BASE_URI = os.getenv("BASE_URI", "https://www.mi-master.es/proyecto/datos/")
 MAX_RETRIES = 30
 RETRY_DELAY = 2
+# Tiempo máximo para esperar a que aparezca y se estabilice el TTL (segundos)
+TTL_WAIT_TIMEOUT = int(os.getenv("TTL_WAIT_TIMEOUT", "600"))
+TTL_STABLE_WINDOW = int(
+    os.getenv("TTL_STABLE_WINDOW", "4")
+)  # segundos consecutivos con tamaño estable
 
 # Template de configuración del repositorio
 REPO_CONFIG_TEMPLATE = """
@@ -107,6 +112,41 @@ def create_repository():
     except requests.exceptions.RequestException as e:
         print(f"✗ Error en la petición: {e}")
         return False
+
+
+def wait_for_ttl_file():
+    """Espera a que el archivo TTL exista y deje de crecer (tamaño estable).
+    Devuelve True si el archivo está listo, False si agota el tiempo de espera.
+    """
+    ttl_path = Path(TTL_FILE)
+    print(f"Esperando a que exista el TTL: {TTL_FILE} ...")
+
+    start = time.time()
+    last_size = -1
+    stable_for = 0
+
+    while time.time() - start < TTL_WAIT_TIMEOUT:
+        if ttl_path.exists():
+            size = ttl_path.stat().st_size
+            if size == last_size:
+                stable_for += RETRY_DELAY
+            else:
+                stable_for = 0
+                last_size = size
+
+            print(
+                f"  TTL presente, tamaño actual: {size} bytes (estable por {stable_for}s)"
+            )
+            if stable_for >= TTL_STABLE_WINDOW:
+                print("✓ TTL listo para subir")
+                return True
+        else:
+            print("  Aún no existe el archivo TTL...")
+
+        time.sleep(RETRY_DELAY)
+
+    print("✗ Timeout esperando a que el TTL esté listo")
+    return False
 
 
 def upload_ttl_file():
@@ -203,7 +243,11 @@ def main():
     if not wait_for_graphdb():
         sys.exit(1)
 
-    # Paso 2: Verificar/Crear repositorio
+    # Paso 2: Esperar a que el TTL esté listo
+    if not wait_for_ttl_file():
+        sys.exit(1)
+
+    # Paso 3: Verificar/Crear repositorio
     if repository_exists():
         print(f"\n✓ El repositorio '{REPOSITORY_ID}' ya existe")
         print("  Se añadirán los datos al repositorio existente")
@@ -214,11 +258,11 @@ def main():
         # Esperar un momento para que el repositorio esté listo
         time.sleep(2)
 
-    # Paso 3: Subir archivo TTL
+    # Paso 4: Subir archivo TTL
     if not upload_ttl_file():
         sys.exit(1)
 
-    # Paso 4: Obtener estadísticas
+    # Paso 5: Obtener estadísticas
     time.sleep(1)
     get_repository_stats()
 
