@@ -26,24 +26,27 @@ Usage:
 
 import argparse
 import csv
+import importlib.util
 import os
 import sys
+from contextlib import contextmanager
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
-from contextlib import contextmanager
 
 import psycopg2
 import psycopg2.extras as extras
-import importlib.util
 
 # Try to import sentence-transformers for embeddings
 HAS_TRANSFORMERS = False
 try:
     from sentence_transformers import SentenceTransformer
+
     HAS_TRANSFORMERS = True
 except ImportError:
     HAS_TRANSFORMERS = False
-    print("Warning: sentence-transformers not installed. Embeddings will not be computed.")
+    print(
+        "Warning: sentence-transformers not installed. Embeddings will not be computed."
+    )
 
 # --- File paths (relative to repo root) ---
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
@@ -134,7 +137,7 @@ def connect_db(args):
         dbname=args.dbname,
     )
     # Ensure the client encoding is UTF8 so text sent to Postgres is stored as UTF-8
-    conn.set_client_encoding('UTF8')
+    conn.set_client_encoding("UTF8")
     conn.autocommit = False
     return conn
 
@@ -299,7 +302,58 @@ CREATE TABLE AYUDA (
 
 
 def create_tables(cur):
-    cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    """Create required extension and tables.
+
+    Tries to create the pgvector extension. If that fails (e.g., no superuser
+    privileges), we check whether the extension already exists. If it doesn't,
+    we raise a clear, actionable error so the user can fix the environment
+    instead of seeing a cryptic connection error.
+    """
+    try:
+        cur.execute("CREATE EXTENSION IF NOT EXISTS vector;")
+    except Exception as e:
+        # Try to rollback if possible
+        conn = None
+        try:
+            conn = cur.connection
+        except Exception:
+            conn = None
+
+        if conn is not None:
+            try:
+                # If connection is still open, rollback the failed transaction
+                if getattr(conn, "closed", 0) == 0:
+                    conn.rollback()
+            except Exception:
+                pass
+
+        # Attempt to detect if extension exists only if connection is usable
+        exists = False
+        if conn is not None and getattr(conn, "closed", 0) == 0:
+            try:
+                with conn.cursor() as c2:
+                    c2.execute("SELECT 1 FROM pg_extension WHERE extname = 'vector'")
+                    exists = c2.fetchone() is not None
+            except Exception:
+                exists = False
+
+        if not exists:
+            msg = (
+                "pgvector extension is not available and could not be created.\n"
+                "You need superuser privileges and the pgvector package installed on the server.\n\n"
+                "If you're using Docker from this repo, run one of the following:\n"
+                "  - docker compose up load_data   # recommended (runs inside the network)\n"
+                '  - docker compose exec db psql -U $POSTGRES_USER -d $POSTGRES_DB -c "CREATE EXTENSION IF NOT EXISTS vector;"\n\n'
+                "Or re-run this script pointing to the Docker DB superuser, e.g.:\n"
+                "  python scripts/load_filtered_csvs.py --host localhost --port 5432 \\\n"
+                "    --user ${POSTGRES_USER} --password ${POSTGRES_PASSWORD} --dbname ${POSTGRES_DB}\n"
+            )
+            raise RuntimeError(msg) from e
+
+        # If extension exists, proceed
+        print("Note: pgvector extension already present; continuing.")
+
+    # Create all tables
     cur.execute(DDL_SQL)
 
 
@@ -504,8 +558,10 @@ def load_licitacion(conn, csv_files):
     model = None
     if HAS_TRANSFORMERS:
         try:
-            print("Loading sentence-transformers model 'all-MiniLM-L6-v2' (this may take a while)...")
-            model = SentenceTransformer('all-MiniLM-L6-v2')
+            print(
+                "Loading sentence-transformers model 'all-MiniLM-L6-v2' (this may take a while)..."
+            )
+            model = SentenceTransformer("all-MiniLM-L6-v2")
             print("Model loaded successfully.")
         except Exception as e:
             print(f"Warning: failed to load transformer model: {e}")
@@ -529,12 +585,18 @@ def load_licitacion(conn, csv_files):
                     skipped_dups += 1
                     continue  # keep first occurrence only to respect ER PK
                 seen_ids.add(ident)
-                
+
                 # Extract text fields for embedding
                 objeto = (r.get("objeto_licitacion_o_lote") or "").strip()
-                descripcion = (r.get("descripcion_de_la_financiacion_europea") or "").strip()
-                combined_text = (objeto + "\n" + descripcion).strip() if (objeto or descripcion) else ""
-                
+                descripcion = (
+                    r.get("descripcion_de_la_financiacion_europea") or ""
+                ).strip()
+                combined_text = (
+                    (objeto + "\n" + descripcion).strip()
+                    if (objeto or descripcion)
+                    else ""
+                )
+
                 rows.append(
                     (
                         to_int(ident),
@@ -560,19 +622,25 @@ def load_licitacion(conn, csv_files):
                 )
                 texts_for_embedding.append(combined_text)
                 kept += 1
-        
+
         if rows:
             # Compute embeddings in batch if model is available
             embeddings = []
             if model is not None and texts_for_embedding:
-                print(f"Computing embeddings for {len(texts_for_embedding)} LICITACION rows...")
+                print(
+                    f"Computing embeddings for {len(texts_for_embedding)} LICITACION rows..."
+                )
                 try:
-                    embeddings = compute_transformer_embeddings(model, texts_for_embedding)
-                    print(f"Embeddings computed successfully. Dimension: {len(embeddings[0])}")
+                    embeddings = compute_transformer_embeddings(
+                        model, texts_for_embedding
+                    )
+                    print(
+                        f"Embeddings computed successfully. Dimension: {len(embeddings[0])}"
+                    )
                 except Exception as e:
                     print(f"Warning: failed to compute embeddings: {e}")
                     embeddings = []
-            
+
             # Prepare rows with embeddings
             rows_with_embeddings = []
             for i, row in enumerate(rows):
@@ -581,7 +649,7 @@ def load_licitacion(conn, csv_files):
                     rows_with_embeddings.append(row + (emb_literal,))
                 else:
                     rows_with_embeddings.append(row + (None,))
-            
+
             # Insert rows into database
             with conn.cursor() as cur:
                 extras.execute_values(
@@ -601,7 +669,7 @@ def load_licitacion(conn, csv_files):
                     """,
                     rows_with_embeddings,
                 )
-            
+
             # Create index for efficient similarity search if embeddings were added
             if embeddings:
                 print("Creating vector index for similarity search...")
@@ -613,7 +681,7 @@ def load_licitacion(conn, csv_files):
                     print("Vector index created successfully.")
                 except Exception as e:
                     print(f"Warning: failed to create vector index: {e}")
-        
+
         total_kept += kept
         total_skipped_nif += skipped_nif
         total_skipped_dups += skipped_dups

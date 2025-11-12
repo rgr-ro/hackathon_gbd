@@ -12,7 +12,7 @@ from pathlib import Path
 import requests
 
 # Configuración
-GRAPHDB_URL = os.getenv("GRAPHDB_URL", "http://graphdb:8000")
+GRAPHDB_URL = os.getenv("GRAPHDB_URL", "http://graphdb:7200")
 REPOSITORY_ID = os.getenv("REPOSITORY_ID", "uam_data")
 TTL_FILE = os.getenv("TTL_FILE", "/app/data/ttl/grafo_completo.ttl")
 MAX_RETRIES = 30
