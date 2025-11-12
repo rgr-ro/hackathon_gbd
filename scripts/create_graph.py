@@ -528,8 +528,8 @@ def main():
     parser.add_argument(
         "--uam-wikidata-qid",
         type=str,
-        default="Q233939",
-        help="QID de Wikidata para la UAM (default: Q233939)",
+        default="Q518911",
+        help="QID de Wikidata para la UAM (default: Q518911)",
     )
     parser.add_argument(
         "--uam-dbpedia-resource",
@@ -631,11 +631,11 @@ def main():
 
     # === MODIFICACIÓN: El "Vínculo de Oro" (configurable por CLI) ===
     # Wikidata
-    qid = (args.uam_wikidata_qid or "Q233939").strip()
-    # Permite tanto "Q233939" como "wd:Q233939" o URL completa; normalizamos a QID
+    qid = (args.uam_wikidata_qid or "Q518911").strip()
+    # Permite tanto "Q518911" como "wd:Q518911" o URL completa; normalizamos a QID
     import re as _re
     m = _re.search(r"(Q\\d+)", qid)
-    qid_norm = m.group(1) if m else "Q233939"
+    qid_norm = m.group(1) if m else "Q518911"
     g.add((UAM_URI, OWL.sameAs, WD[qid_norm]))
 
     # DBpedia
