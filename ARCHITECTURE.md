@@ -162,5 +162,5 @@ pgadmin
 ### Enlaces Externos (desde RDF)
 
 - DBpedia: http://dbpedia.org/resource/Autonomous_University_of_Madrid
-- Wikidata: http://www.wikidata.org/entity/Q233939
+- Wikidata: http://www.wikidata.org/entity/Q788091
 - Schema.org: Vocabulario estándar para entidades
